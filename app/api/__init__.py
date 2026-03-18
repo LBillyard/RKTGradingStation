@@ -115,16 +115,44 @@ def create_app() -> FastAPI:
 
     logger.info(f"App mode: {settings.mode} — registered routes accordingly")
 
-    # Agent version endpoint (served by cloud for auto-update checks)
+    # Agent version and download endpoints (served by cloud)
     if settings.mode in ("desktop", "cloud"):
         @app.get("/api/agent/version")
         async def agent_latest_version():
             return {
                 "latest_version": "1.0.0",
-                "download_url": "https://rktgradingstation.co.uk/static/downloads/RKTStationAgent-Setup.exe",
+                "download_url": "https://rktgradingstation.co.uk/api/agent/download",
                 "release_notes": "Initial release — scanner, printer, NFC support",
                 "mandatory": False,
             }
+
+        @app.get("/api/agent/download")
+        async def agent_download():
+            """Generate a presigned S3 URL and redirect to download the agent."""
+            from fastapi.responses import RedirectResponse
+            try:
+                import boto3
+                s3 = boto3.client(
+                    "s3",
+                    region_name=app_settings.s3.region or "eu-west-2",
+                    aws_access_key_id=app_settings.s3.access_key_id or None,
+                    aws_secret_access_key=app_settings.s3.secret_access_key or None,
+                )
+                url = s3.generate_presigned_url(
+                    "get_object",
+                    Params={
+                        "Bucket": app_settings.s3.bucket or "rkt-grading-images",
+                        "Key": "downloads/RKTStationAgent-v1.0.0.exe",
+                    },
+                    ExpiresIn=3600,
+                )
+                return RedirectResponse(url)
+            except Exception:
+                # Fallback: serve from static if S3 not configured
+                static_path = UI_DIR / "static" / "downloads" / "RKTStationAgent-Setup.exe"
+                if static_path.exists():
+                    return FileResponse(str(static_path), filename="RKTStationAgent-Setup.exe")
+                return JSONResponse({"error": "Agent download not available"}, status_code=404)
 
     # Robots.txt — block all search engine indexing
     @app.get("/robots.txt")
