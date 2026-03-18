@@ -1691,7 +1691,7 @@ async function loadChangelogTab() {
             items: [
                 { tag: 'Architecture', color: '#8b5cf6', text: 'Migrated from Windows desktop app to cloud-hosted web application at rktgradingstation.co.uk' },
                 { tag: 'Architecture', color: '#8b5cf6', text: 'Split into cloud server (FastAPI + PostgreSQL on AWS EC2) and local Station Agent for hardware' },
-                { tag: 'Infrastructure', color: '#3b82f6', text: 'EC2 t3.micro instance deployed in eu-west-2 (London) with Nginx + SSL (Let\\'s Encrypt)' },
+                { tag: 'Infrastructure', color: '#3b82f6', text: 'EC2 t3.micro instance deployed in eu-west-2 (London) with Nginx + SSL (Lets Encrypt)' },
                 { tag: 'Infrastructure', color: '#3b82f6', text: 'S3 bucket (rkt-grading-images) for card image storage with IAM role-based access' },
                 { tag: 'Infrastructure', color: '#3b82f6', text: 'PostgreSQL database on same instance — WAL mode, auto-creates all 23 tables' },
                 { tag: 'Security', color: '#f59e0b', text: 'HTTPS enforced with auto-redirect, X-Robots-Tag noindex to prevent search engine indexing' },
