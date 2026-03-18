@@ -115,6 +115,17 @@ def create_app() -> FastAPI:
 
     logger.info(f"App mode: {settings.mode} — registered routes accordingly")
 
+    # Agent version endpoint (served by cloud for auto-update checks)
+    if settings.mode in ("desktop", "cloud"):
+        @app.get("/api/agent/version")
+        async def agent_latest_version():
+            return {
+                "latest_version": "1.0.0",
+                "download_url": "https://rktgradingstation.co.uk/static/downloads/RKTStationAgent-Setup.exe",
+                "release_notes": "Initial release — scanner, printer, NFC support",
+                "mandatory": False,
+            }
+
     # Robots.txt — block all search engine indexing
     @app.get("/robots.txt")
     async def robots_txt():

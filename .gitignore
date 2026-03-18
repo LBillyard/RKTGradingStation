@@ -47,6 +47,11 @@ Thumbs.db
 # SSH keys
 *.pem
 
+# Build artifacts
+dist/
+build/
+*.spec
+
 # Agent env
 agent.env
 

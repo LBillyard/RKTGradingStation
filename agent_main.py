@@ -17,6 +17,8 @@ from pathlib import Path
 # Ensure app is importable
 sys.path.insert(0, str(Path(__file__).parent))
 
+from agent_version import AGENT_VERSION, AGENT_NAME, check_for_update, auto_update
+
 
 def main() -> None:
     """Start the RKT Station Agent."""
@@ -29,17 +31,31 @@ def main() -> None:
     setup_logging(settings.log_level, settings.data_dir)
     logger = logging.getLogger(__name__)
     logger.info("=" * 50)
-    logger.info("RKT Station Agent starting")
+    logger.info(f"{AGENT_NAME} v{AGENT_VERSION}")
     logger.info(f"Station ID: {settings.station_id or 'not set'}")
     logger.info(f"Scanner mock: {settings.scanner.mock_mode}")
     logger.info(f"Printer mock: {settings.printer.mock_mode}")
     logger.info(f"NFC mock: {settings.nfc.mock_mode}")
     logger.info("=" * 50)
 
+    # Check for updates on startup
+    logger.info("Checking for updates...")
+    update_info = check_for_update()
+    if update_info:
+        logger.info(
+            f"Update available: v{update_info['latest_version']} "
+            f"(current: v{AGENT_VERSION})"
+        )
+        if update_info.get("mandatory"):
+            auto_update(update_info)
+        else:
+            logger.info("Optional update — will apply on next restart")
+    else:
+        logger.info(f"Agent is up to date (v{AGENT_VERSION})")
+
     use_tray = "--tray" in sys.argv
 
     if use_tray:
-        # Run server in background, system tray in foreground
         server_thread = threading.Thread(
             target=_run_server,
             args=(settings,),
@@ -49,7 +65,6 @@ def main() -> None:
         server_thread.start()
         _run_tray(settings, logger)
     else:
-        # Run server directly (console mode)
         _run_server(settings)
 
 
@@ -74,7 +89,6 @@ def _run_tray(settings, logger) -> None:
         import pystray
         from PIL import Image as PilImage
 
-        # Create a simple icon (green square with RKT text)
         icon_img = PilImage.new("RGB", (64, 64), color=(34, 139, 34))
 
         def on_quit(icon, item):
@@ -84,7 +98,7 @@ def _run_tray(settings, logger) -> None:
             logger.info("Agent is running on localhost:8742")
 
         menu = pystray.Menu(
-            pystray.MenuItem("RKT Station Agent", None, enabled=False),
+            pystray.MenuItem(f"{AGENT_NAME} v{AGENT_VERSION}", None, enabled=False),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Status: Online", on_status),
             pystray.MenuItem(f"Station: {settings.station_id or 'default'}", None, enabled=False),
@@ -92,7 +106,7 @@ def _run_tray(settings, logger) -> None:
             pystray.MenuItem("Quit", on_quit),
         )
 
-        icon = pystray.Icon("rkt-agent", icon_img, "RKT Station Agent", menu)
+        icon = pystray.Icon("rkt-agent", icon_img, f"{AGENT_NAME} v{AGENT_VERSION}", menu)
         logger.info("System tray icon active")
         icon.run()
     except ImportError:

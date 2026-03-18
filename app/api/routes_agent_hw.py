@@ -76,7 +76,9 @@ def _get_nfc_reader():
 
 @router.get("/status")
 async def agent_status():
-    """Agent health check — returns hardware availability."""
+    """Agent health check — returns hardware availability and version."""
+    from agent_version import AGENT_VERSION
+
     scanner = _get_scanner()
     printer = _get_printer()
     nfc = _get_nfc_reader()
@@ -87,6 +89,7 @@ async def agent_status():
 
     return {
         "status": "online",
+        "version": AGENT_VERSION,
         "station_id": settings.station_id,
         "mode": settings.mode,
         "hardware": {
