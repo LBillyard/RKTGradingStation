@@ -1,0 +1,707 @@
+/* ============================================================
+   RKT Grading Station - Main Stylesheet
+   Bootstrap 5 Admin Theme - Clean, Professional, Light
+   ============================================================ */
+
+/* ---- Root Variables ---- */
+:root {
+    --sidebar-width: 250px;
+    --topbar-height: 56px;
+    --border-color: #dee2e6;
+    --primary-blue: #3b82f6;
+    --bg-body: #f8f9fa;
+    --bg-surface: #ffffff;
+    --text-primary: #212529;
+    --text-muted: #6c757d;
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.1);
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+}
+
+/* ---- Base / Body ---- */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-body);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---- Top Navbar ---- */
+.top-bar {
+    background-color: var(--bg-surface);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    height: var(--topbar-height);
+    z-index: 1030;
+    padding-left: calc(var(--sidebar-width) + 1rem);
+    padding-right: 1rem;
+}
+
+.top-bar .navbar-brand {
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+/* ---- Sidebar (Desktop) ---- */
+.sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--sidebar-width);
+    background-color: var(--bg-surface);
+    border-right: 1px solid var(--border-color);
+    z-index: 1040;
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: transform 0.3s ease;
+}
+
+.sidebar-brand {
+    display: flex;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    font-size: 1.1rem;
+    border-bottom: 1px solid var(--border-color);
+    height: var(--topbar-height);
+    white-space: nowrap;
+}
+
+.sidebar-brand i {
+    font-size: 1.25rem;
+}
+
+/* ---- Sidebar Navigation ---- */
+.sidebar-nav {
+    padding: 0.5rem 0;
+}
+
+.sidebar-nav .nav {
+    padding: 0;
+}
+
+.sidebar-nav .nav-item {
+    margin: 1px 0.5rem;
+}
+
+.sidebar-nav .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.55rem 0.85rem;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    position: relative;
+}
+
+.sidebar-nav .nav-link i {
+    font-size: 1.05rem;
+    width: 1.25rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.sidebar-nav .nav-link:hover {
+    color: var(--text-primary);
+    background-color: #f1f5f9;
+}
+
+.sidebar-nav .nav-link.active {
+    color: var(--primary-blue);
+    background-color: #eff6ff;
+    font-weight: 600;
+}
+
+.sidebar-nav .nav-link.active::before {
+    content: '';
+    position: absolute;
+    left: -0.5rem;
+    top: 0.375rem;
+    bottom: 0.375rem;
+    width: 3px;
+    background-color: var(--primary-blue);
+    border-radius: 0 2px 2px 0;
+}
+
+/* Section divider in sidebar */
+.nav-divider {
+    height: 0;
+    margin: 0.5rem 1rem;
+    border-top: 1px solid var(--border-color);
+    list-style: none;
+}
+
+/* Sidebar footer */
+.sidebar-footer {
+    padding: 0.75rem 1.25rem;
+    border-top: 1px solid var(--border-color);
+    text-align: center;
+}
+
+/* ---- Sidebar Offcanvas (Mobile) ---- */
+.sidebar-offcanvas {
+    width: var(--sidebar-width) !important;
+}
+
+.sidebar-offcanvas .sidebar-nav .nav-link.active::before {
+    left: 0;
+}
+
+/* ---- Main Content Area ---- */
+.main-content {
+    margin-left: var(--sidebar-width);
+    margin-top: var(--topbar-height);
+    min-height: calc(100vh - var(--topbar-height));
+    background-color: var(--bg-body);
+}
+
+/* ---- Cards ---- */
+.card {
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.2s ease;
+}
+
+.card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.card-header {
+    background-color: var(--bg-surface);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.85rem 1.25rem;
+    font-weight: 600;
+}
+
+.card-body {
+    padding: 1.25rem;
+}
+
+/* ---- Tables ---- */
+.table {
+    margin-bottom: 0;
+    font-size: 0.8125rem;
+}
+
+.table thead th {
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+    border-bottom-width: 1px;
+    padding: 0.75rem 1rem;
+    white-space: nowrap;
+}
+
+.table tbody td {
+    padding: 0.7rem 1rem;
+    vertical-align: middle;
+    border-color: #f0f0f0;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+.table-light {
+    --bs-table-bg: #f8f9fa;
+}
+
+/* Alternating row colors */
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: #fcfcfd;
+}
+
+/* ---- Forms ---- */
+.form-control,
+.form-select {
+    border-color: var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    padding: 0.5rem 0.75rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--primary-blue);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.form-label {
+    font-weight: 600;
+    font-size: 0.8125rem;
+    margin-bottom: 0.35rem;
+    color: var(--text-primary);
+}
+
+.input-group-text {
+    background-color: #f8f9fa;
+    border-color: var(--border-color);
+    font-size: 0.875rem;
+}
+
+/* ---- Buttons ---- */
+.btn {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    border-radius: var(--radius-sm);
+    padding: 0.45rem 1rem;
+    transition: all 0.15s ease;
+}
+
+.btn-primary {
+    background-color: var(--primary-blue);
+    border-color: var(--primary-blue);
+}
+
+.btn-primary:hover {
+    background-color: #2563eb;
+    border-color: #2563eb;
+}
+
+.btn-outline-primary {
+    color: var(--primary-blue);
+    border-color: var(--primary-blue);
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--primary-blue);
+    border-color: var(--primary-blue);
+}
+
+/* ---- Badges ---- */
+.badge {
+    font-weight: 500;
+    font-size: 0.7rem;
+    padding: 0.35em 0.65em;
+    border-radius: 4px;
+}
+
+/* ---- Progress Bars ---- */
+.progress {
+    height: 6px;
+    border-radius: 3px;
+    background-color: #e9ecef;
+}
+
+.progress-bar {
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+
+/* ---- Toasts ---- */
+.toast {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    font-size: 0.8125rem;
+}
+
+.toast-header {
+    border-bottom: 1px solid #f0f0f0;
+    padding: 0.5rem 0.75rem;
+}
+
+.toast-body {
+    padding: 0.65rem 0.75rem;
+}
+
+/* ---- Alerts ---- */
+.alert {
+    border-radius: var(--radius-md);
+    font-size: 0.8125rem;
+    border-width: 1px;
+}
+
+/* ---- Image Panels ---- */
+.image-panel {
+    position: relative;
+    background-color: #f1f5f9;
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.image-panel-16x9 {
+    aspect-ratio: 16 / 9;
+}
+
+.image-panel-4x3 {
+    aspect-ratio: 4 / 3;
+}
+
+.image-panel-3x4 {
+    aspect-ratio: 3 / 4;
+}
+
+.image-panel img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.image-panel .placeholder-content {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+}
+
+/* ---- Defect Overlays ---- */
+.defect-overlay-container {
+    position: relative;
+}
+
+.defect-overlay {
+    position: absolute;
+    border: 2px solid;
+    border-radius: 3px;
+    pointer-events: none;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+.defect-overlay:hover {
+    opacity: 1;
+}
+
+.defect-overlay.severity-high {
+    border-color: #dc3545;
+    background-color: rgba(220, 53, 69, 0.12);
+}
+
+.defect-overlay.severity-medium {
+    border-color: #fd7e14;
+    background-color: rgba(253, 126, 20, 0.12);
+}
+
+.defect-overlay.severity-low {
+    border-color: #ffc107;
+    background-color: rgba(255, 193, 7, 0.12);
+}
+
+.defect-overlay .defect-label {
+    position: absolute;
+    top: -1.4rem;
+    left: 0;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 0.1rem 0.35rem;
+    border-radius: 2px;
+    color: #fff;
+    white-space: nowrap;
+}
+
+.defect-overlay.severity-high .defect-label {
+    background-color: #dc3545;
+}
+
+.defect-overlay.severity-medium .defect-label {
+    background-color: #fd7e14;
+}
+
+.defect-overlay.severity-low .defect-label {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+/* ---- Scrollbar ---- */
+.sidebar::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background-color: #d1d5db;
+    border-radius: 2px;
+}
+
+/* ---- Spinner ---- */
+.spinner-border {
+    width: 2rem;
+    height: 2rem;
+    border-width: 0.2em;
+}
+
+/* ============================================================
+   Dark Theme
+   ============================================================ */
+[data-theme="dark"] {
+    --bg-body: #0f172a;
+    --bg-surface: #1e293b;
+    --text-primary: #e2e8f0;
+    --text-muted: #94a3b8;
+    --border-color: #334155;
+    --primary-blue: #60a5fa;
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
+    --shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .card {
+    color: #e2e8f0;
+}
+
+[data-theme="dark"] .card-header {
+    color: #e2e8f0;
+}
+
+[data-theme="dark"] .sidebar-nav .nav-link:hover {
+    background-color: #334155;
+}
+
+[data-theme="dark"] .sidebar-nav .nav-link.active {
+    background-color: rgba(96, 165, 250, 0.15);
+}
+
+[data-theme="dark"] .table-hover tbody tr:hover {
+    background-color: #253449;
+}
+
+[data-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: #1a2536;
+}
+
+[data-theme="dark"] .table tbody td {
+    border-color: #2d3a4d;
+}
+
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .form-select {
+    background-color: #0f172a;
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .input-group-text {
+    background-color: #334155;
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .modal-content {
+    background-color: var(--bg-surface);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .modal-header {
+    border-bottom-color: var(--border-color);
+}
+
+[data-theme="dark"] .modal-footer {
+    border-top-color: var(--border-color);
+}
+
+[data-theme="dark"] .btn-close {
+    filter: invert(1);
+}
+
+[data-theme="dark"] .image-panel {
+    background-color: #1a2536;
+    border-color: #334155;
+}
+
+[data-theme="dark"] .badge.bg-primary-subtle {
+    background-color: rgba(96, 165, 250, 0.2) !important;
+    color: #93c5fd !important;
+}
+
+[data-theme="dark"] .sidebar::-webkit-scrollbar-thumb {
+    background-color: #475569;
+}
+
+/* ============================================================
+   Grade Review - Name Labels & Enhancements
+   ============================================================ */
+.grade-name-label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+/* Collapsible card headers */
+.card-header[data-bs-toggle="collapse"] {
+    cursor: pointer;
+    user-select: none;
+}
+
+.card-header[data-bs-toggle="collapse"] .bi-chevron-down {
+    transition: transform 0.2s ease;
+}
+
+.card-header[data-bs-toggle="collapse"].collapsed .bi-chevron-down {
+    transform: rotate(-90deg);
+}
+
+/* Centering diagram SVG */
+.centering-diagram svg text {
+    fill: var(--text-muted);
+}
+
+.centering-diagram svg line {
+    stroke: var(--border-color);
+}
+
+.centering-diagram svg rect {
+    stroke: var(--border-color);
+}
+
+/* Sub-grade progress bars */
+.sub-grade-bar {
+    height: 6px;
+    border-radius: 3px;
+    background-color: #e9ecef;
+    overflow: hidden;
+}
+
+.sub-grade-bar .bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+
+/* Defect severity pills */
+.severity-pill {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.2em 0.6em;
+    border-radius: 10px;
+}
+
+/* Zone heatmap icons */
+.zone-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0;
+}
+
+.zone-item i {
+    font-size: 1rem;
+    width: 1.25rem;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+/* Population chart bars */
+.pop-bar-track {
+    height: 18px;
+    background-color: #e9ecef;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.pop-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+
+[data-theme="dark"] .grade-name-label {
+    color: #94a3b8;
+}
+
+[data-theme="dark"] .sub-grade-bar {
+    background-color: #334155;
+}
+
+[data-theme="dark"] .pop-bar-track {
+    background-color: #334155;
+}
+
+[data-theme="dark"] .centering-diagram svg text {
+    fill: #94a3b8;
+}
+
+[data-theme="dark"] .centering-diagram svg line {
+    stroke: #475569;
+}
+
+[data-theme="dark"] .centering-diagram svg rect {
+    stroke: #475569;
+}
+
+/* ============================================================
+   Keyboard Shortcut Help
+   ============================================================ */
+.kbd-shortcut {
+    display: inline-block;
+    padding: 2px 6px;
+    font-family: monospace;
+    font-size: 0.75rem;
+    background-color: #e9ecef;
+    border: 1px solid #ced4da;
+    border-radius: 3px;
+    color: #495057;
+}
+
+[data-theme="dark"] .kbd-shortcut {
+    background-color: #334155;
+    border-color: #475569;
+    color: #e2e8f0;
+}
+
+/* ============================================================
+   Responsive Adjustments
+   ============================================================ */
+
+@media (max-width: 991.98px) {
+    .top-bar {
+        padding-left: 1rem;
+    }
+
+    .main-content {
+        margin-left: 0;
+    }
+
+    .sidebar {
+        transform: translateX(-100%);
+    }
+}
+
+@media (max-width: 575.98px) {
+    .card-body {
+        padding: 1rem;
+    }
+
+    .table thead th,
+    .table tbody td {
+        padding: 0.5rem 0.65rem;
+    }
+
+    .btn {
+        padding: 0.4rem 0.75rem;
+    }
+}

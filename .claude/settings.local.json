@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir)",
+      "WebFetch(domain:www.pokewallet.io)",
+      "mcp__Context7__resolve-library-id",
+      "mcp__Context7__get-library-docs",
+      "WebFetch(domain:nucarve.com)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:forum.lightburnsoftware.com)",
+      "Bash(python -c \"import sys,json; data=json.load\\(sys.stdin\\); print\\(data[0][''text'']\\)\")",
+      "Bash(for dir in app app/api app/core app/db app/models app/services app/services/scanner app/services/vision app/services/ocr app/services/card_id app/services/grading app/services/authenticity app/services/engraving app/services/security app/services/reference_library app/services/reports app/utils tests)",
+      "Bash(do touch \"$dir/__init__.py\")",
+      "Bash(done)",
+      "Bash(for f in \"app/core/__init__.py\" \"app/core/events.py\" \"app/core/background.py\" \"app/core/logging_config.py\")",
+      "Bash(do wc -l \"C:/Users/Shadow/Desktop/LazerGradingSoftware/$f\")",
+      "Bash(for f in \"app/api/__init__.py\" \"app/api/routes_dashboard.py\" \"app/api/routes_scan.py\" \"app/api/routes_queue.py\" \"app/api/routes_grading.py\" \"app/api/routes_authenticity.py\" \"app/api/routes_engraving.py\" \"app/api/routes_security.py\" \"app/api/routes_reference.py\" \"app/api/routes_reports.py\" \"app/api/routes_settings.py\" \"app/api/routes_audit.py\")",
+      "Bash(python -c \":*)",
+      "WebSearch",
+      "WebFetch(domain:codeberg.org)",
+      "WebFetch(domain:github.com)",
+      "Bash(pip install:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(curl -s http://localhost:8741/api/health)",
+      "Bash(curl -s http://127.0.0.1:8741/)",
+      "Bash(wc -l /c/Users/Shadow/Desktop/LazerGradingSoftware/app/api/routes_*.py)",
+      "mcp__Desktop_Commander__write_file",
+      "mcp__AWS_API_MCP_Server__call_aws",
+      "Bash(git init:*)",
+      "Bash(gh repo:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "rkt-server",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-c", "import uvicorn; from app.api import create_app; app = create_app(); uvicorn.run(app, host='127.0.0.1', port=8741, log_level='info')"],
+      "port": 8741
+    }
+  ]
+}

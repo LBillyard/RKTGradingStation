@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+
+# Data directories (keep structure, ignore contents)
+data/scans/**
+!data/scans/mock/
+data/exports/**
+data/references/**
+data/debug/**
+data/calibration/**
+data/db/**
+data/logs/**
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Models
+*.onnx
+*.pdparams
+*.pdopt
+*.pdmodel
+*.nb
+
+# SSH keys
+*.pem
+
+# Agent env
+agent.env
+
+# Misc
+*.log
