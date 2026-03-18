@@ -39,7 +39,9 @@
       "Bash(ssh -i:*)",
       "Bash(python build_agent.py)",
       "Bash(aws s3:*)",
-      "Bash(timeout 10 /c/Users/Shadow/Desktop/LazerGradingSoftware/dist/RKTStationAgent.exe)"
+      "Bash(timeout 10 /c/Users/Shadow/Desktop/LazerGradingSoftware/dist/RKTStationAgent.exe)",
+      "Bash(timeout 8 \"/c/Users/Shadow/Downloads/RKTStationAgent-v1.0.0 \\(1\\).exe\")",
+      "Bash(echo \"EXIT_CODE: $?\")"
     ]
   }
 }

@@ -1,5 +1,37 @@
 [
   {
+    "version": "1.0.3",
+    "date": "2026-03-18",
+    "type": "patch",
+    "title": "Installer & Packaging Fixes",
+    "changes": [
+      {
+        "category": "fix",
+        "description": "Fixed 'Failed to load Python DLL' error — switched from --onedir to --onefile build so the exe is fully self-contained with no external dependencies"
+      },
+      {
+        "category": "fix",
+        "description": "Fixed crash on startup caused by PyInstaller's --noconsole mode setting sys.stderr to None, which broke uvicorn's logging initialisation"
+      },
+      {
+        "category": "fix",
+        "description": "Fixed auto-update download failing to follow S3 presigned URL redirects — added follow_redirects=True to httpx stream"
+      },
+      {
+        "category": "improvement",
+        "description": "Reduced agent exe size from 84MB to 37MB by creating a clean build environment without ML libraries (torch, paddleocr, scipy)"
+      },
+      {
+        "category": "improvement",
+        "description": "Created dedicated agent_requirements.txt with only the dependencies the agent actually needs"
+      },
+      {
+        "category": "architecture",
+        "description": "S3 download now uses 'latest.exe' key so the download endpoint doesn't need updating on each version bump"
+      }
+    ]
+  },
+  {
     "version": "1.0.0",
     "date": "2026-03-18",
     "type": "release",

@@ -12,7 +12,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Bump this on each release
-AGENT_VERSION = "1.0.0"
+AGENT_VERSION = "1.0.3"
 AGENT_NAME = "RKT Station Agent"
 
 # Cloud endpoint for version checks

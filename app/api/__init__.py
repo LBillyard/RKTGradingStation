@@ -120,9 +120,9 @@ def create_app() -> FastAPI:
         @app.get("/api/agent/version")
         async def agent_latest_version():
             return {
-                "latest_version": "1.0.0",
+                "latest_version": "1.0.3",
                 "download_url": "https://rktgradingstation.co.uk/api/agent/download",
-                "release_notes": "Initial release — scanner, printer, NFC support",
+                "release_notes": "Fixed Python DLL error, noconsole crash, and S3 download redirect",
                 "mandatory": False,
             }
 
@@ -148,7 +148,7 @@ def create_app() -> FastAPI:
                     "get_object",
                     Params={
                         "Bucket": app_settings.s3.bucket or "rkt-grading-images",
-                        "Key": "downloads/RKTStationAgent-v1.0.0.exe",
+                        "Key": "downloads/RKTStationAgent-latest.exe",
                     },
                     ExpiresIn=3600,
                 )
