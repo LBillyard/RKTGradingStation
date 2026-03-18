@@ -49,8 +49,12 @@ def create_app() -> FastAPI:
         cors_origins.append("http://localhost:8742")
         cors_origins.append("http://127.0.0.1:8742")
     elif settings.mode == "agent":
-        # Agent accepts requests from any origin (cloud-hosted UI)
-        cors_origins = ["*"]
+        # Agent accepts requests from the cloud UI and localhost
+        cors_origins = [
+            "https://rktgradingstation.co.uk",
+            "http://localhost:8741",
+            "http://127.0.0.1:8741",
+        ]
 
     app.add_middleware(
         CORSMiddleware,
@@ -238,26 +242,20 @@ def create_app() -> FastAPI:
                 _seed_db.commit()
                 logger.info("Migrated operators.pin_hash -> password_hash")
 
-            # --- Seed default admin ---
-            import hashlib
-
-            # Remove old default admin if exists
-            old_admin = _seed_db.query(Operator).filter(Operator.name == "admin").first()
-            if old_admin:
-                _seed_db.delete(old_admin)
-                _seed_db.commit()
-
-            # Create Luke if not exists
-            luke = _seed_db.query(Operator).filter(Operator.name == "Luke").first()
-            if not luke:
-                luke = Operator(
-                    name="Luke",
-                    password_hash=hashlib.sha256("Poker2013!".encode()).hexdigest(),
+            # --- Seed default admin (only if NO operators exist) ---
+            any_operator = _seed_db.query(Operator).first()
+            if not any_operator:
+                import bcrypt
+                default_pw = os.environ.get("RKT_DEFAULT_ADMIN_PASSWORD", "ChangeMe123!")
+                pw_hash = bcrypt.hashpw(default_pw.encode(), bcrypt.gensalt()).decode()
+                admin = Operator(
+                    name="admin",
+                    password_hash=pw_hash,
                     role="admin",
                 )
-                _seed_db.add(luke)
+                _seed_db.add(admin)
                 _seed_db.commit()
-                logger.info("Default admin created (username='Luke', password='Poker2013!')")
+                logger.warning("Default admin created — change the password immediately via Admin panel")
         finally:
             _seed_db.close()
 

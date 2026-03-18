@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Integer, Float, Text, DateTime, ForeignKey, JSON, Boolean
+from sqlalchemy import String, Integer, Float, Text, DateTime, ForeignKey, JSON, Boolean, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base, uuid_pk, created_at_col, updated_at_col
@@ -12,6 +12,10 @@ from app.db.database import Base, uuid_pk, created_at_col, updated_at_col
 class DefectFinding(Base):
     """A single defect detected during grading analysis."""
     __tablename__ = "defect_findings"
+    __table_args__ = (
+        Index("idx_defect_findings_card_id", "card_record_id"),
+        Index("idx_defect_findings_category", "category"),
+    )
 
     id: Mapped[uuid_pk]
     card_record_id: Mapped[str] = mapped_column(String(36), ForeignKey("card_records.id"))
@@ -35,6 +39,10 @@ class DefectFinding(Base):
 class GradeDecision(Base):
     """Final grade decision for a card."""
     __tablename__ = "grade_decisions"
+    __table_args__ = (
+        Index("idx_grade_decisions_card_id", "card_record_id"),
+        Index("idx_grade_decisions_status", "status"),
+    )
 
     id: Mapped[uuid_pk]
     card_record_id: Mapped[str] = mapped_column(String(36), ForeignKey("card_records.id"), unique=True)

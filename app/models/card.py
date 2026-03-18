@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Integer, Float, Text, DateTime, ForeignKey, JSON
+from sqlalchemy import String, Integer, Float, Text, DateTime, ForeignKey, JSON, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base, uuid_pk, created_at_col, updated_at_col
@@ -12,6 +12,12 @@ from app.db.database import Base, uuid_pk, created_at_col, updated_at_col
 class CardRecord(Base):
     """Central record for a graded card, linking all related data."""
     __tablename__ = "card_records"
+    __table_args__ = (
+        Index("idx_card_records_session_id", "session_id"),
+        Index("idx_card_records_card_name", "card_name"),
+        Index("idx_card_records_status", "status"),
+        Index("idx_card_records_franchise", "franchise"),
+    )
 
     id: Mapped[uuid_pk]
     session_id: Mapped[str] = mapped_column(String(36), ForeignKey("scan_sessions.id"))

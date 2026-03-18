@@ -47,7 +47,14 @@
       "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 8742 -ErrorAction SilentlyContinue | Select-Object OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }\")",
       "Bash(curl -s http://localhost:8742/)",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f''''Running: v{d[\"\"version\"\"]}''''\\)\" curl -s https://rktgradingstation.co.uk/api/agent/version)",
-      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f''''Latest:  v{d[\"\"latest_version\"\"]}''''\\)\")"
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f''''Latest:  v{d[\"\"latest_version\"\"]}''''\\)\")",
+      "Bash(grep -E \"\\\\.\\(py\\)$\")",
+      "Bash(grep -r \"Depends\\(_require_admin\\)\" /c/Users/Shadow/Desktop/LazerGradingSoftware/app/api/*.py)",
+      "Bash(grep -c \"pass$\" /c/Users/Shadow/Desktop/LazerGradingSoftware/app/api/*.py)",
+      "Bash(grep -r \"raw_input\\\\|request.body\\\\|request.url\" /c/Users/Shadow/Desktop/LazerGradingSoftware/app/api/*.py)",
+      "Bash(grep -r \"pass$\\\\|NotImplemented\\\\|...\" /c/Users/Shadow/Desktop/LazerGradingSoftware/app/api/*.py)",
+      "Bash(grep -B 1 \"pass$\")",
+      "Bash(grep -r \"Index\\\\|index=\" /c/Users/Shadow/Desktop/LazerGradingSoftware/app/models/*.py)"
     ]
   }
 }

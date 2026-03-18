@@ -119,7 +119,7 @@ async def export_graded_cards(
 
     cards = db.query(CardRecord, GradeDecision).outerjoin(
         GradeDecision, GradeDecision.card_record_id == CardRecord.id
-    ).order_by(CardRecord.created_at.desc()).all()
+    ).order_by(CardRecord.created_at.desc()).limit(10000).all()  # Cap at 10k to prevent OOM
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -129,11 +129,18 @@ async def export_graded_cards(
         "Defect Count", "Profile", "Status", "Graded At",
     ])
 
+    def _safe_csv(val):
+        """Escape CSV formula injection."""
+        s = str(val) if val else ""
+        if s and s[0] in ("=", "+", "-", "@"):
+            return "'" + s
+        return s
+
     for card, grade in cards:
         writer.writerow([
-            card.card_name or "",
-            card.set_name or "",
-            card.collector_number or "",
+            _safe_csv(card.card_name),
+            _safe_csv(card.set_name),
+            _safe_csv(card.collector_number),
             card.language or "",
             card.serial_number or "",
             grade.final_grade if grade else "",

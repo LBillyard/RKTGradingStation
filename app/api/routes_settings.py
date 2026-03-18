@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
+from app.api.routes_auth import _require_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -186,8 +187,8 @@ async def get_scanner_settings():
 
 
 @router.put("/scanner")
-async def update_scanner_settings(req: ScannerSettingsUpdate):
-    """Update scanner settings."""
+async def update_scanner_settings(req: ScannerSettingsUpdate, admin: dict = Depends(_require_admin)):
+    """Update scanner settings (admin only)."""
     s = _get_settings()
     if req.mock_mode is not None:
         s.scanner.mock_mode = req.mock_mode
@@ -222,8 +223,8 @@ async def get_grading_settings():
 
 
 @router.put("/grading")
-async def update_grading_settings(req: GradingSettingsUpdate):
-    """Update grading settings."""
+async def update_grading_settings(req: GradingSettingsUpdate, admin: dict = Depends(_require_admin)):
+    """Update grading settings (admin only)."""
     s = _get_settings()
 
     if req.sensitivity_profile is not None:
@@ -275,8 +276,8 @@ async def get_authenticity_settings():
 
 
 @router.put("/authenticity")
-async def update_authenticity_settings(req: AuthenticitySettingsUpdate):
-    """Update authenticity settings."""
+async def update_authenticity_settings(req: AuthenticitySettingsUpdate, admin: dict = Depends(_require_admin)):
+    """Update authenticity settings (admin only)."""
     s = _get_settings()
     if req.auto_approve_threshold is not None:
         s.authenticity.auto_approve_threshold = req.auto_approve_threshold
@@ -311,8 +312,8 @@ async def get_api_settings():
 
 
 @router.put("/api")
-async def update_api_settings(req: ApiSettingsUpdate):
-    """Update PokeWallet API settings."""
+async def update_api_settings(req: ApiSettingsUpdate, admin: dict = Depends(_require_admin)):
+    """Update PokeWallet API settings (admin only)."""
     s = _get_settings()
     if req.api_key is not None:
         s.pokewallet.api_key = req.api_key
@@ -351,8 +352,8 @@ async def get_openrouter_settings():
 
 
 @router.put("/openrouter")
-async def update_openrouter_settings(req: OpenRouterSettingsUpdate):
-    """Update OpenRouter AI settings."""
+async def update_openrouter_settings(req: OpenRouterSettingsUpdate, admin: dict = Depends(_require_admin)):
+    """Update OpenRouter AI settings (admin only)."""
     s = _get_settings()
     if req.api_key is not None:
         s.openrouter.api_key = req.api_key
@@ -405,8 +406,8 @@ async def get_security_settings():
 
 
 @router.put("/security")
-async def update_security_settings(req: SecuritySettingsUpdate):
-    """Update security pattern settings."""
+async def update_security_settings(req: SecuritySettingsUpdate, admin: dict = Depends(_require_admin)):
+    """Update security pattern settings (admin only)."""
     s = _get_settings()
     if req.microtext_height_mm is not None:
         if not (0.3 <= req.microtext_height_mm <= 0.5):
@@ -440,8 +441,8 @@ async def get_nfc_settings():
 
 
 @router.put("/nfc")
-async def update_nfc_settings(req: NfcSettingsUpdate):
-    """Update NFC tag programming settings."""
+async def update_nfc_settings(req: NfcSettingsUpdate, admin: dict = Depends(_require_admin)):
+    """Update NFC tag programming settings (admin only)."""
     s = _get_settings()
     if req.mock_mode is not None:
         s.nfc.mock_mode = req.mock_mode
@@ -478,8 +479,8 @@ async def get_printer_settings():
 
 
 @router.put("/printer")
-async def update_printer_settings(req: PrinterSettingsUpdate):
-    """Update printer settings."""
+async def update_printer_settings(req: PrinterSettingsUpdate, admin: dict = Depends(_require_admin)):
+    """Update printer settings (admin only)."""
     s = _get_settings()
     if req.mock_mode is not None:
         s.printer.mock_mode = req.mock_mode
@@ -957,8 +958,8 @@ async def get_webhook_settings():
 
 
 @router.put("/webhook")
-async def update_webhook_settings(body: WebhookSettingsUpdate):
-    """Update webhook notification settings."""
+async def update_webhook_settings(body: WebhookSettingsUpdate, admin: dict = Depends(_require_admin)):
+    """Update webhook notification settings (admin only)."""
     s = _get_settings()
     if body.enabled is not None:
         s.webhook.enabled = body.enabled
@@ -1029,8 +1030,8 @@ async def test_pokewallet_connection():
 
 
 @router.put("/system/log-level")
-async def update_log_level(body: dict):
-    """Update the application log level."""
+async def update_log_level(body: dict, admin: dict = Depends(_require_admin)):
+    """Update the application log level (admin only)."""
     level = body.get("log_level", "").upper()
     if level not in ("DEBUG", "INFO", "WARNING", "ERROR"):
         raise HTTPException(status_code=400, detail="Invalid log level")

@@ -149,19 +149,33 @@ def start_session(operator_name: str = "", station_id: str = "") -> GradingSessi
     return session
 
 
+_SESSION_ALLOWED_FIELDS = frozenset({
+    "card_record_id", "serial_number", "operator_name", "station_id",
+    "scan_started_at", "scan_completed_at", "grade_started_at",
+    "grade_completed_at", "print_started_at", "print_completed_at",
+    "nfc_started_at", "nfc_completed_at", "completed_at",
+    "total_seconds", "status",
+})
+
+
 def update_session(session_id: str, **kwargs) -> Optional[GradingSession]:
     """Update session timing fields."""
     session = _active_sessions.get(session_id)
     if not session:
         return None
 
-    for key, value in kwargs.items():
+    # Whitelist field names to prevent SQL injection
+    safe_kwargs = {k: v for k, v in kwargs.items() if k in _SESSION_ALLOWED_FIELDS}
+    if not safe_kwargs:
+        return session
+
+    for key, value in safe_kwargs.items():
         if hasattr(session, key):
             setattr(session, key, value)
 
     db = _get_db()
-    fields = ", ".join(f"{k} = ?" for k in kwargs)
-    values = list(kwargs.values()) + [session_id]
+    fields = ", ".join(f"{k} = ?" for k in safe_kwargs)
+    values = list(safe_kwargs.values()) + [session_id]
     db.execute(f"UPDATE sessions SET {fields} WHERE id = ?", values)
     db.commit()
     return session

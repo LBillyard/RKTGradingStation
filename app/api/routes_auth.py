@@ -17,6 +17,28 @@ from app.db.database import get_db
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Simple in-memory rate limiter for login attempts
+_login_attempts: dict[str, list[float]] = {}
+_LOGIN_MAX_ATTEMPTS = 5
+_LOGIN_WINDOW_SECONDS = 300  # 5 minutes
+
+
+def _check_rate_limit(identifier: str) -> bool:
+    """Returns True if the request is allowed, False if rate limited."""
+    now = time.time()
+    attempts = _login_attempts.get(identifier, [])
+    # Remove attempts outside the window
+    attempts = [t for t in attempts if now - t < _LOGIN_WINDOW_SECONDS]
+    _login_attempts[identifier] = attempts
+    return len(attempts) < _LOGIN_MAX_ATTEMPTS
+
+
+def _record_attempt(identifier: str) -> None:
+    """Record a login attempt."""
+    if identifier not in _login_attempts:
+        _login_attempts[identifier] = []
+    _login_attempts[identifier].append(time.time())
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -148,6 +170,14 @@ class UpdateOperatorRequest(BaseModel):
 @router.post("/login")
 async def login(req: LoginRequest, db: Session = Depends(get_db)):
     """Authenticate an operator with username + password."""
+    # Rate limiting: max 5 attempts per username per 5 minutes
+    if not _check_rate_limit(req.name):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many login attempts. Please wait 5 minutes before trying again.",
+        )
+    _record_attempt(req.name)
+
     from app.models.operator import Operator
 
     operator = db.query(Operator).filter(Operator.name == req.name).first()
