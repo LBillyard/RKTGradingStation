@@ -9,20 +9,31 @@ Usage:
     python agent_main.py --tray   # Run with system tray icon (background)
 """
 
+import io
 import logging
+import os
 import sys
 import threading
 from pathlib import Path
 
+# Fix for PyInstaller --noconsole: sys.stdout/stderr are None which crashes uvicorn logging
+if sys.stdout is None:
+    sys.stdout = io.StringIO()
+if sys.stderr is None:
+    sys.stderr = io.StringIO()
+
 # Ensure app is importable
-sys.path.insert(0, str(Path(__file__).parent))
+if getattr(sys, 'frozen', False):
+    # PyInstaller: use the exe's directory
+    sys.path.insert(0, str(Path(sys.executable).parent))
+else:
+    sys.path.insert(0, str(Path(__file__).parent))
 
 from agent_version import AGENT_VERSION, AGENT_NAME, check_for_update, auto_update
 
 
 def main() -> None:
     """Start the RKT Station Agent."""
-    import os
     os.environ.setdefault("RKT_MODE", "agent")
 
     from app.config import settings

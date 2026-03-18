@@ -38,7 +38,8 @@
       "Bash(ssh -i /c/Users/Shadow/Desktop/rkt-grading-key.pem ubuntu@3.8.27.8 'sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3-pip python3-venv python3-dev postgresql postgresql-contrib nginx certbot python3-certbot-nginx libgl1 libglib2.0-0 libpq-dev gcc git 2>&1 | tail -5')",
       "Bash(ssh -i:*)",
       "Bash(python build_agent.py)",
-      "Bash(aws s3:*)"
+      "Bash(aws s3:*)",
+      "Bash(timeout 10 /c/Users/Shadow/Desktop/LazerGradingSoftware/dist/RKTStationAgent.exe)"
     ]
   }
 }
