@@ -23,6 +23,8 @@ const routes = {
     '/login':                { module: './pages/login.js',                title: 'Operator Login',       icon: 'bi-person-lock' },
     '/admin':                { module: './pages/admin.js',               title: 'Admin',                icon: 'bi-people-fill' },
     '/slab-assembly':        { module: './pages/slab-assembly.js',       title: 'Slab Assembly',        icon: 'bi-box-seam' },
+    '/training':             { module: './pages/training.js',           title: 'Training Mode',        icon: 'bi-mortarboard' },
+    '/calibration':          { module: './pages/calibration.js',       title: 'Calibration',          icon: 'bi-sliders' },
     '/agent-changelog':      { module: './pages/agent-changelog.js',    title: 'Agent Changelog',      icon: 'bi-journal-text' },
 };
 

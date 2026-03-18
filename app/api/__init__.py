@@ -111,6 +111,9 @@ def create_app() -> FastAPI:
         from app.api.routes_analytics import router as analytics_router
         app.include_router(analytics_router, prefix="/api/analytics", tags=["Analytics"])
 
+        from app.api.routes_training import router as training_router
+        app.include_router(training_router, prefix="/api/training", tags=["Training"])
+
     # Agent + Desktop: hardware routes (scanner, printer, NFC)
     if settings.mode in ("desktop", "agent"):
         from app.api.routes_agent_hw import router as agent_hw_router
@@ -263,5 +266,21 @@ def create_app() -> FastAPI:
         event_bus.subscribe(Events.GRADE_OVERRIDDEN, lambda d: fire_webhook_background("grade.overridden", d))
         event_bus.subscribe(Events.AUTH_FLAGGED, lambda d: fire_webhook_background("auth.flagged", d))
         logger.info("Webhook event subscriptions registered")
+
+        # Auto-link AI grades to training data
+        def _on_grade_calculated(data):
+            if not data or "card_record_id" not in data:
+                return
+            try:
+                from app.services.training.service import link_ai_grade
+                _link_db = get_session()
+                try:
+                    link_ai_grade(data["card_record_id"], _link_db)
+                finally:
+                    _link_db.close()
+            except Exception as e:
+                logger.debug(f"Training link skipped: {e}")
+
+        event_bus.subscribe(Events.GRADE_CALCULATED, _on_grade_calculated)
 
     return app

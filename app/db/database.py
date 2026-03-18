@@ -58,7 +58,7 @@ def init_db(db_url: str, echo: bool = False) -> None:
             cursor.close()
 
     # Import all models to ensure they're registered with Base
-    from app.models import scan, card, ocr, grading, authenticity, security, hardware, admin, reference, operator, slab, station  # noqa: F401
+    from app.models import scan, card, ocr, grading, authenticity, security, hardware, admin, reference, operator, slab, station, training  # noqa: F401
 
     Base.metadata.create_all(bind=_engine)
 

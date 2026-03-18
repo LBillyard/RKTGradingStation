@@ -31,6 +31,8 @@ class Events:
     NFC_FAILED = "nfc.failed"
     SLAB_ASSEMBLY_STARTED = "slab.assembly_started"
     SLAB_ASSEMBLY_COMPLETED = "slab.assembly_completed"
+    TRAINING_GRADE_SUBMITTED = "training.grade_submitted"
+    CALIBRATION_APPLIED = "calibration.applied"
 
 
 class EventBus:
