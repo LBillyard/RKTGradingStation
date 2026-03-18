@@ -84,7 +84,7 @@ def auto_update(update_info: dict) -> bool:
 
         logger.info(f"Downloading agent update v{update_info['latest_version']}...")
         with tempfile.NamedTemporaryFile(suffix=".exe", delete=False) as tmp:
-            with httpx.stream("GET", download_url, timeout=120.0) as resp:
+            with httpx.stream("GET", download_url, follow_redirects=True, timeout=120.0) as resp:
                 resp.raise_for_status()
                 for chunk in resp.iter_bytes(chunk_size=8192):
                     tmp.write(chunk)
