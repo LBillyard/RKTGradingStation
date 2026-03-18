@@ -20,14 +20,14 @@ paddleocr>=2.7.0
 paddlepaddle>=2.6.0
 pytesseract>=0.3.10
 
-# Scanner
-comtypes>=1.4.0
+# Scanner (Windows only)
+comtypes>=1.4.0; sys_platform == "win32"
 
 # Printer (Windows GDI)
-pywin32>=306
+pywin32>=306; sys_platform == "win32"
 
 # NFC (PC/SC smart card access)
-pyscard>=2.0.7
+pyscard>=2.0.7; sys_platform == "win32"
 
 # Card API
 httpx>=0.27.0
