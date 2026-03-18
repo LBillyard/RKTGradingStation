@@ -30,10 +30,11 @@ export async function init(container) {
                     </a>
                 </div>
             </div>
-            <hr class="mt-2 mb-3">
-            <div id="changelog-content">
-                <div class="text-center py-4">
-                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+            <div class="card mt-3">
+                <div class="card-body" id="changelog-content">
+                    <div class="text-center py-4">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                    </div>
                 </div>
             </div>
         </div>`;
