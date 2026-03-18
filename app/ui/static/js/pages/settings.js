@@ -15,14 +15,14 @@ let _calibrationMatrix = null;  // current generated matrix data
 
 // ------------------------------------------------------- Tab definitions
 const TABS = [
-    { id: 'scanner',       label: 'Scanner',          icon: 'bi-camera' },
-    { id: 'grading',       label: 'Grading',          icon: 'bi-clipboard-check' },
-    { id: 'authenticity',  label: 'Authenticity',     icon: 'bi-shield-check' },
-    { id: 'apikeys',       label: 'API',              icon: 'bi-key' },
-    { id: 'laser',         label: 'Laser / Material', icon: 'bi-lightning' },
-    { id: 'security',      label: 'Security',         icon: 'bi-lock' },
-    { id: 'slab',          label: 'NFC / Printer',    icon: 'bi-box-seam' },
-    { id: 'system',        label: 'System',           icon: 'bi-pc-display' },
+    { id: 'scanner',       label: 'Scanner',          icon: 'bi-camera',           desc: 'Hardware & mock mode' },
+    { id: 'grading',       label: 'Grading Engine',   icon: 'bi-clipboard-check',  desc: 'Weights & sensitivity' },
+    { id: 'authenticity',  label: 'Authenticity',     icon: 'bi-shield-check',     desc: 'Thresholds & auto-approve' },
+    { id: 'apikeys',       label: 'API Keys',         icon: 'bi-key',              desc: 'PokeWallet & OpenRouter' },
+    { id: 'security',      label: 'Security',         icon: 'bi-lock',             desc: 'Patterns & engraving' },
+    { id: 'slab',          label: 'NFC / Printer',    icon: 'bi-box-seam',         desc: 'Tag type & label config' },
+    { id: 'system',        label: 'System',           icon: 'bi-pc-display',       desc: 'Storage, logs & database' },
+    { id: 'changelog',     label: 'Changelog',        icon: 'bi-clock-history',    desc: 'Platform update history' },
 ];
 
 // ------------------------------------------------------- Init
@@ -30,6 +30,7 @@ export async function init(container) {
     _container = container;
     container.innerHTML = `
         <div class="px-4 py-3">
+            <h5 class="mb-3"><i class="bi bi-gear me-2"></i>Settings</h5>
             <div class="row">
                 <!-- Sidebar Navigation -->
                 <div class="col-lg-3 mb-4">
@@ -37,11 +38,18 @@ export async function init(container) {
                         <div class="card-body p-2">
                             <div class="nav flex-column nav-pills" id="settings-tabs" role="tablist">
                                 ${TABS.map((t, i) => `
-                                    <button class="nav-link text-start small ${i === 0 ? 'active' : ''}"
+                                    <button class="nav-link text-start ${i === 0 ? 'active' : ''}"
                                             id="tab-btn-${t.id}" type="button"
                                             data-bs-toggle="pill" data-bs-target="#tab-${t.id}"
-                                            role="tab" aria-controls="tab-${t.id}" aria-selected="${i === 0}">
-                                        <i class="bi ${t.icon} me-2"></i>${t.label}
+                                            role="tab" aria-controls="tab-${t.id}" aria-selected="${i === 0}"
+                                            style="padding: 8px 12px;">
+                                        <div class="d-flex align-items-center">
+                                            <i class="bi ${t.icon} me-2" style="width:18px;"></i>
+                                            <div>
+                                                <div class="fw-medium" style="font-size:0.85rem;">${t.label}</div>
+                                                <div class="text-muted" style="font-size:0.7rem; line-height:1.2;">${t.desc}</div>
+                                            </div>
+                                        </div>
                                     </button>
                                 `).join('')}
                             </div>
@@ -94,10 +102,10 @@ async function loadTab(tabId) {
             case 'grading':       await loadGradingTab(); break;
             case 'authenticity':  await loadAuthenticityTab(); break;
             case 'apikeys':       await loadApiTab(); break;
-            case 'laser':         await loadLaserTab(); break;
             case 'security':      await loadSecurityTab(); break;
             case 'slab':          await loadSlabTab(); break;
             case 'system':        await loadSystemTab(); break;
+            case 'changelog':     await loadChangelogTab(); break;
         }
     } catch (err) {
         const pane = _container.querySelector(`#tab-${tabId}`);
@@ -637,8 +645,8 @@ async function loadApiTab() {
     });
 }
 
-// ------------------------------------------------------- Laser / Material Tab
-async function loadLaserTab() {
+// ------------------------------------------------------- Laser tab removed (handled by LightBurn directly)
+async function _removed_loadLaserTab() {
     const [materials, jigs, calHistory] = await Promise.all([
         api.get('/settings/materials'),
         api.get('/settings/jigs'),
@@ -1669,6 +1677,93 @@ async function loadSystemTab() {
         }
     });
 }
+
+// ------------------------------------------------------- Platform Changelog Tab
+async function loadChangelogTab() {
+    const pane = _container.querySelector('#tab-changelog');
+
+    // Platform changelog — non-software development updates
+    const entries = [
+        {
+            date: '2026-03-18',
+            version: 'Platform v1.0',
+            title: 'Cloud Migration & Multi-Station Architecture',
+            items: [
+                { tag: 'Architecture', color: '#8b5cf6', text: 'Migrated from Windows desktop app to cloud-hosted web application at rktgradingstation.co.uk' },
+                { tag: 'Architecture', color: '#8b5cf6', text: 'Split into cloud server (FastAPI + PostgreSQL on AWS EC2) and local Station Agent for hardware' },
+                { tag: 'Infrastructure', color: '#3b82f6', text: 'EC2 t3.micro instance deployed in eu-west-2 (London) with Nginx + SSL (Let\\'s Encrypt)' },
+                { tag: 'Infrastructure', color: '#3b82f6', text: 'S3 bucket (rkt-grading-images) for card image storage with IAM role-based access' },
+                { tag: 'Infrastructure', color: '#3b82f6', text: 'PostgreSQL database on same instance — WAL mode, auto-creates all 23 tables' },
+                { tag: 'Security', color: '#f59e0b', text: 'HTTPS enforced with auto-redirect, X-Robots-Tag noindex to prevent search engine indexing' },
+                { tag: 'Security', color: '#f59e0b', text: 'Bcrypt password hashing replacing SHA-256, with auto-upgrade on login for existing accounts' },
+                { tag: 'Security', color: '#f59e0b', text: 'HMAC-SHA256 session tokens with 24-hour TTL, auth middleware on all /api/* routes' },
+                { tag: 'Hardware', color: '#22c55e', text: 'Epson C6000 label printer integration — GDI printing via pywin32 at up to 1200 DPI' },
+                { tag: 'Hardware', color: '#22c55e', text: 'NFC tag programming — NTag213 (basic URL) and NTag424 DNA (SUN/SDM cryptographic verification)' },
+                { tag: 'Hardware', color: '#22c55e', text: 'ACR1252U NFC reader support via PC/SC (pyscard), with configurable default tag type in settings' },
+                { tag: 'Domain', color: '#06b6d4', text: 'rktgradingstation.co.uk live with DNS A records pointing to Elastic IP 3.8.27.8' },
+            ],
+        },
+        {
+            date: '2026-03-18',
+            version: 'Station Agent v1.2.1',
+            title: 'Agent Telemetry & Monitoring Suite',
+            items: [
+                { tag: 'Agent', color: '#ef4444', text: 'Station Agent packaged as single 37MB Windows exe (PyInstaller --onefile) with auto-update' },
+                { tag: 'Agent', color: '#ef4444', text: 'System tray with custom rocket icon, hardware status menu, and "Start with Windows" toggle' },
+                { tag: 'Telemetry', color: '#8b5cf6', text: 'Session timing — tracks scan/grade/print/NFC duration per card with operator productivity stats' },
+                { tag: 'Telemetry', color: '#8b5cf6', text: 'Scanner quality monitoring — brightness, contrast, sharpness, noise analysis on every scan' },
+                { tag: 'Telemetry', color: '#8b5cf6', text: 'Image tamper detection — SHA-256 hash + HMAC signing on capture for cryptographic proof of origin' },
+                { tag: 'Telemetry', color: '#8b5cf6', text: 'Chain of custody logging — full audit trail per card serial (station, operator, scanner, timestamp)' },
+                { tag: 'Telemetry', color: '#8b5cf6', text: 'Print job tracking with ink usage estimates and cartridge remaining predictions' },
+                { tag: 'Analytics', color: '#3b82f6', text: 'Cloud analytics — population reports, grade distribution, defect heatmaps, operator bias detection' },
+            ],
+        },
+        {
+            date: '2026-03-18',
+            version: 'Slab Assembly v1.0',
+            title: 'Slab Insert Printing & NFC Workflow',
+            items: [
+                { tag: 'Workflow', color: '#22c55e', text: 'Four-step slab assembly wizard: Select Card → Print Insert → Program NFC → Complete' },
+                { tag: 'Workflow', color: '#22c55e', text: 'Configurable NFC tag type (NTag424 DNA default) — selectable in Settings → NFC / Printer' },
+                { tag: 'Workflow', color: '#22c55e', text: 'Assembly queue with status tracking (graded → printed → NFC programmed → complete)' },
+                { tag: 'Design', color: '#06b6d4', text: 'Label renderer using Pillow — serial, grade, card name at configurable DPI and dimensions' },
+                { tag: 'Design', color: '#06b6d4', text: 'NFC verification endpoint (/api/slab/verify) for customer tap — decrypts PICCData, validates CMAC' },
+            ],
+        },
+    ];
+
+    const entriesHtml = entries.map((entry, idx) => {
+        const itemsHtml = entry.items.map(item =>
+            `<div class="d-flex align-items-start gap-2 mb-2">
+                <span class="badge mt-1" style="background:${item.color}15; color:${item.color}; font-size:0.65rem; min-width:75px;">${item.tag}</span>
+                <span class="small">${item.text}</span>
+            </div>`
+        ).join('');
+
+        return `
+            <div class="${idx < entries.length - 1 ? 'border-bottom pb-3 mb-3' : ''}">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="badge bg-primary" style="font-size:0.7rem;">${entry.version}</span>
+                    <span class="text-muted small">${entry.date}</span>
+                    <span class="fw-medium">${entry.title}</span>
+                </div>
+                ${itemsHtml}
+            </div>`;
+    }).join('');
+
+    pane.innerHTML = `
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Platform Changelog</h6>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">Development milestones, infrastructure changes, and non-software updates.</p>
+                ${entriesHtml}
+            </div>
+        </div>
+    `;
+}
+
 
 async function loadBackupsList() {
     const container = document.getElementById('backup-list-container');
