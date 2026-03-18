@@ -15,7 +15,6 @@ let _currentAssembly = null;
 let _nfcSettings = null;
 
 export async function init(container) {
-    // Load NFC settings to know which tag type to use
     try {
         _nfcSettings = await api.get('/settings/nfc');
     } catch {
@@ -23,81 +22,74 @@ export async function init(container) {
     }
 
     container.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h4 class="mb-0"><i class="bi bi-box-seam me-2"></i>Slab Assembly</h4>
-            <div id="assembly-status-badge"></div>
-        </div>
+        <div class="px-4 py-3">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0"><i class="bi bi-box-seam me-2"></i>Slab Assembly</h5>
+            </div>
 
-        <!-- Step indicators -->
-        <div class="d-flex gap-2 mb-4" id="step-indicators">
-            <div class="step-pill active" data-step="select">
-                <i class="bi bi-1-circle me-1"></i>Select Card
+            <!-- Stepper -->
+            <div class="card mb-3">
+                <div class="card-body py-3">
+                    <div class="d-flex align-items-center justify-content-center gap-0" id="step-indicators">
+                        <div class="slab-step active" data-step="select">
+                            <span class="slab-step-num">1</span>
+                            <span class="slab-step-label">Select Card</span>
+                        </div>
+                        <div class="slab-step-line"></div>
+                        <div class="slab-step" data-step="print">
+                            <span class="slab-step-num">2</span>
+                            <span class="slab-step-label">Print Insert</span>
+                        </div>
+                        <div class="slab-step-line"></div>
+                        <div class="slab-step" data-step="nfc">
+                            <span class="slab-step-num">3</span>
+                            <span class="slab-step-label">Program NFC</span>
+                        </div>
+                        <div class="slab-step-line"></div>
+                        <div class="slab-step" data-step="complete">
+                            <span class="slab-step-num">4</span>
+                            <span class="slab-step-label">Complete</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="step-pill" data-step="print">
-                <i class="bi bi-2-circle me-1"></i>Print Insert
-            </div>
-            <div class="step-pill" data-step="nfc">
-                <i class="bi bi-3-circle me-1"></i>Program NFC
-            </div>
-            <div class="step-pill" data-step="complete">
-                <i class="bi bi-4-circle me-1"></i>Complete
-            </div>
-        </div>
 
-        <!-- Step content -->
-        <div id="step-content" class="card">
-            <div class="card-body" id="step-body">
-                <div class="text-center py-4">
-                    <div class="spinner-border text-primary" role="status"></div>
+            <!-- Step content -->
+            <div class="card mb-3">
+                <div class="card-body" id="step-body">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Assembly queue -->
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-list-task me-2"></i>Recent Assemblies</span>
+                    <button class="btn btn-sm btn-outline-secondary" id="btn-refresh-queue">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Serial</th>
+                                    <th>Card</th>
+                                    <th>Grade</th>
+                                    <th>Status</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="queue-tbody"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
-
-        <!-- Assembly queue -->
-        <div class="card mt-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-list-task me-2"></i>Assembly Queue</span>
-                <button class="btn btn-sm btn-outline-secondary" id="btn-refresh-queue">
-                    <i class="bi bi-arrow-clockwise"></i>
-                </button>
-            </div>
-            <div class="card-body p-0">
-                <div id="queue-table-container">
-                    <table class="table table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>Serial</th>
-                                <th>Card</th>
-                                <th>Grade</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="queue-tbody"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <style>
-            .step-pill {
-                padding: 6px 14px;
-                border-radius: 20px;
-                background: var(--bs-gray-200);
-                font-size: 0.85rem;
-                cursor: pointer;
-                transition: all 0.2s;
-            }
-            .step-pill.active {
-                background: var(--bs-primary);
-                color: white;
-            }
-            .step-pill.done {
-                background: var(--bs-success);
-                color: white;
-            }
-            .step-pill.done i::before { content: "\\F26A"; }
-        </style>
     `;
 
     document.getElementById('btn-refresh-queue')?.addEventListener('click', loadQueue);
@@ -127,12 +119,16 @@ function _isSecureTag(type) {
 function updateStepIndicators(currentStep) {
     const steps = ['select', 'print', 'nfc', 'complete'];
     const currentIdx = steps.indexOf(currentStep);
-    document.querySelectorAll('.step-pill').forEach(pill => {
-        const step = pill.dataset.step;
+    document.querySelectorAll('.slab-step').forEach(el => {
+        const step = el.dataset.step;
         const idx = steps.indexOf(step);
-        pill.classList.remove('active', 'done');
-        if (idx < currentIdx) pill.classList.add('done');
-        else if (idx === currentIdx) pill.classList.add('active');
+        el.classList.remove('active', 'done');
+        if (idx < currentIdx) el.classList.add('done');
+        else if (idx === currentIdx) el.classList.add('active');
+    });
+    // Update connector lines
+    document.querySelectorAll('.slab-step-line').forEach((line, i) => {
+        line.classList.toggle('done', i < currentIdx);
     });
 }
 
@@ -153,32 +149,29 @@ async function showSelectCardStep() {
 
         if (available.length === 0) {
             body.innerHTML = `
-                <div class="text-center py-4 text-muted">
-                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                    <p>No graded cards ready for slab assembly.</p>
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                    <h6>No graded cards ready for slab assembly</h6>
                     <small>Cards must have an approved grade before assembly.</small>
                 </div>`;
             return;
         }
 
         body.innerHTML = `
-            <h5 class="mb-3">Select a graded card to begin slab assembly</h5>
+            <h6 class="mb-3">Select a graded card to begin slab assembly</h6>
             <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr><th>Serial</th><th>Card Name</th><th>Set</th><th>Grade</th><th></th></tr>
-                    </thead>
+                <table class="table table-hover mb-0">
+                    <thead><tr><th>Serial</th><th>Card Name</th><th>Set</th><th>Grade</th><th></th></tr></thead>
                     <tbody>
                         ${available.map(c => `
                             <tr>
-                                <td><code>${c.serial_number || '—'}</code></td>
+                                <td><code class="small">${c.serial_number || '—'}</code></td>
                                 <td>${c.card_name || 'Unknown'}</td>
-                                <td>${c.set_name || '—'}</td>
+                                <td class="text-muted">${c.set_name || '—'}</td>
                                 <td><span class="badge bg-primary">${c.final_grade || '—'}</span></td>
-                                <td>
-                                    <button class="btn btn-sm btn-primary btn-start-assembly"
-                                            data-card-id="${c.id}">
-                                        Start Assembly
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-primary btn-start-assembly" data-card-id="${c.id}">
+                                        <i class="bi bi-play-fill me-1"></i>Start
                                     </button>
                                 </td>
                             </tr>
@@ -192,25 +185,19 @@ async function showSelectCardStep() {
                 btn.disabled = true;
                 btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
                 try {
-                    const assembly = await api.post('/slab/start', {
-                        card_record_id: btn.dataset.cardId,
-                    });
+                    const assembly = await api.post('/slab/start', { card_record_id: btn.dataset.cardId });
                     _currentAssembly = assembly;
                     await showPrintStep();
                     await loadQueue();
                 } catch (e) {
                     showToast('Failed to start assembly: ' + e.message, 'danger');
                     btn.disabled = false;
-                    btn.textContent = 'Start Assembly';
+                    btn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Start';
                 }
             });
         });
     } catch (e) {
-        body.innerHTML = `
-            <div class="alert alert-warning">
-                <i class="bi bi-exclamation-triangle me-2"></i>
-                Could not load cards: ${e.message}
-            </div>`;
+        body.innerHTML = `<div class="alert alert-warning m-0"><i class="bi bi-exclamation-triangle me-2"></i>Could not load cards: ${e.message}</div>`;
     }
 }
 
@@ -231,45 +218,53 @@ async function showPrintStep() {
     } catch { /* ignore */ }
 
     body.innerHTML = `
-        <h5 class="mb-3"><i class="bi bi-printer me-2"></i>Print Slab Insert</h5>
         <div class="row">
-            <div class="col-md-6">
-                <div class="mb-3">
-                    <label class="form-label">Card</label>
-                    <input class="form-control" disabled value="${a.card?.card_name || 'Unknown'} — ${a.serial_number}">
+            <div class="col-lg-7">
+                <h6 class="mb-3"><i class="bi bi-printer me-2"></i>Print Slab Insert</h6>
+                <div class="row g-3">
+                    <div class="col-sm-6">
+                        <label class="form-label small text-muted">Card</label>
+                        <input class="form-control form-control-sm" disabled value="${a.card?.card_name || 'Unknown'}">
+                    </div>
+                    <div class="col-sm-3">
+                        <label class="form-label small text-muted">Grade</label>
+                        <input class="form-control form-control-sm" disabled value="${a.grade || '—'}">
+                    </div>
+                    <div class="col-sm-3">
+                        <label class="form-label small text-muted">Serial</label>
+                        <input class="form-control form-control-sm" disabled value="${a.serial_number}">
+                    </div>
+                    <div class="col-sm-8">
+                        <label class="form-label small text-muted">Printer</label>
+                        <select class="form-select form-select-sm" id="printer-select">
+                            ${printers.map(p => `<option value="${p}">${p}</option>`).join('')}
+                            ${printers.length === 0 ? '<option value="">No printers found</option>' : ''}
+                        </select>
+                    </div>
+                    <div class="col-sm-4 d-flex align-items-end">
+                        <button class="btn btn-primary w-100" id="btn-print">
+                            <i class="bi bi-printer me-1"></i>Print
+                        </button>
+                    </div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Grade</label>
-                    <input class="form-control" disabled value="${a.grade || '—'}">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Printer</label>
-                    <select class="form-select" id="printer-select">
-                        ${printers.map(p => `<option value="${p}">${p}</option>`).join('')}
-                        ${printers.length === 0 ? '<option value="">No printers found</option>' : ''}
-                    </select>
-                </div>
-                <button class="btn btn-primary" id="btn-print">
-                    <i class="bi bi-printer me-2"></i>Print Label
-                </button>
+                <div id="print-status" class="mt-3"></div>
             </div>
-            <div class="col-md-6">
-                <div class="card bg-light">
-                    <div class="card-body text-center" id="print-preview">
-                        <i class="bi bi-image fs-1 text-muted d-block mb-2"></i>
-                        <small class="text-muted">Label preview will appear after rendering</small>
+            <div class="col-lg-5">
+                <div class="border rounded text-center p-4 h-100 d-flex align-items-center justify-content-center" id="print-preview" style="min-height: 150px; background: var(--bg-body);">
+                    <div class="text-muted">
+                        <i class="bi bi-image fs-2 d-block mb-2"></i>
+                        <small>Label preview</small>
                     </div>
                 </div>
             </div>
-        </div>
-        <div id="print-status" class="mt-3"></div>`;
+        </div>`;
 
     document.getElementById('btn-print')?.addEventListener('click', async () => {
         const btn = document.getElementById('btn-print');
         const statusDiv = document.getElementById('print-status');
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Printing...';
-        statusDiv.innerHTML = '<div class="alert alert-info"><i class="bi bi-hourglass-split me-2"></i>Rendering and printing label...</div>';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Printing...';
+        statusDiv.innerHTML = '<div class="alert alert-info alert-sm py-2 small"><i class="bi bi-hourglass-split me-1"></i>Rendering and printing label...</div>';
 
         try {
             const result = await api.post(`/slab/${a.id}/print`, {
@@ -278,21 +273,21 @@ async function showPrintStep() {
             _currentAssembly = result;
 
             if (result.print_job?.status === 'printed') {
-                statusDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Label printed successfully!</div>';
+                statusDiv.innerHTML = '<div class="alert alert-success py-2 small"><i class="bi bi-check-circle me-1"></i>Label printed!</div>';
                 if (result.print_job.image_path) {
                     document.getElementById('print-preview').innerHTML =
-                        `<img src="/${result.print_job.image_path}" class="img-fluid" alt="Label preview">`;
+                        `<img src="/${result.print_job.image_path}" class="img-fluid rounded" alt="Label">`;
                 }
-                setTimeout(() => showNfcStep(), 1500);
+                setTimeout(() => showNfcStep(), 1200);
             } else {
-                statusDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Print failed: ${result.print_job?.error_message || 'Unknown error'}</div>`;
+                statusDiv.innerHTML = `<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle me-1"></i>${result.print_job?.error_message || 'Print failed'}</div>`;
                 btn.disabled = false;
-                btn.innerHTML = '<i class="bi bi-printer me-2"></i>Retry Print';
+                btn.innerHTML = '<i class="bi bi-printer me-1"></i>Retry';
             }
         } catch (e) {
-            statusDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>${e.message}</div>`;
+            statusDiv.innerHTML = `<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle me-1"></i>${e.message}</div>`;
             btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-printer me-2"></i>Retry Print';
+            btn.innerHTML = '<i class="bi bi-printer me-1"></i>Retry';
         }
         await loadQueue();
     });
@@ -304,9 +299,8 @@ async function showNfcStep() {
     const a = _currentAssembly;
     const tagType = _nfcSettings?.default_tag_type || 'ntag424_dna';
     const isSecure = _isSecureTag(tagType);
-
-    // Check if NFC already programmed
     const nfcTag = a.nfc_tag;
+
     if (nfcTag && nfcTag.status === 'programmed') {
         await showCompleteStep();
         return;
@@ -315,68 +309,57 @@ async function showNfcStep() {
     const tagLabel = _tagTypeLabel(tagType);
     const apiEndpoint = isSecure ? 'ntag424' : 'ntag213';
     const baseUrl = _nfcSettings?.verify_base_url || 'https://rktgrading.com/verify';
-
-    const urlPreview = isSecure
-        ? `${baseUrl}?s=${a.serial_number}&p=&lt;encrypted_picc_data&gt;&c=&lt;cmac&gt;`
-        : `${baseUrl}/${a.serial_number}`;
-
     const icon = isSecure ? 'bi-shield-lock' : 'bi-nfc';
-    const btnClass = isSecure ? 'btn-warning' : 'btn-primary';
 
     body.innerHTML = `
-        <h5 class="mb-3"><i class="bi ${icon} me-2"></i>Program NFC Tag</h5>
-        <div class="alert ${isSecure ? 'alert-warning' : 'alert-info'}">
-            <i class="bi ${isSecure ? 'bi-shield-exclamation' : 'bi-info-circle'} me-2"></i>
-            Place an <strong>${tagLabel}</strong> tag on the NFC reader, then click "Program".
-            ${isSecure
-                ? 'This configures Secure Dynamic Messaging (SUN/SDM) — each tap generates a unique cryptographic URL that cannot be cloned or replayed.'
-                : 'This writes a simple verification URL to the tag.'}
-        </div>
+        <h6 class="mb-3"><i class="bi ${icon} me-2"></i>Program NFC Tag</h6>
         <div class="row align-items-center">
-            <div class="col-md-8">
-                <p><strong>Tag type:</strong> <span class="badge ${isSecure ? 'bg-warning text-dark' : 'bg-secondary'}">${tagLabel}</span>
-                    <a href="#/settings" class="ms-2 small text-muted">Change in Settings</a>
-                </p>
-                <p><strong>URL ${isSecure ? 'template' : 'to write'}:</strong></p>
-                <code class="d-block text-break">${urlPreview}</code>
-                ${isSecure ? '<small class="text-muted mt-1 d-block">The picc_data and cmac fields are filled dynamically by the tag hardware on each tap.</small>' : ''}
+            <div class="col-lg-8">
+                <div class="alert ${isSecure ? 'alert-warning' : 'alert-info'} py-2 small mb-3">
+                    <i class="bi ${isSecure ? 'bi-shield-exclamation' : 'bi-info-circle'} me-1"></i>
+                    Place a <strong>${tagLabel}</strong> tag on the NFC reader, then click Program.
+                    ${isSecure ? 'Each tap will generate a unique cryptographic URL.' : ''}
+                </div>
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <div>
+                        <span class="badge ${isSecure ? 'bg-warning text-dark' : 'bg-secondary'}">${tagLabel}</span>
+                        <a href="#/settings" class="ms-2 small text-muted">Change</a>
+                    </div>
+                    <div class="text-muted small">Serial: <code>${a.serial_number}</code></div>
+                </div>
             </div>
-            <div class="col-md-4 text-end">
-                <button class="${btnClass} btn btn-lg" id="btn-program-nfc">
-                    <i class="bi ${icon} me-2"></i>Program ${tagLabel}
+            <div class="col-lg-4 text-end">
+                <button class="btn ${isSecure ? 'btn-warning' : 'btn-primary'}" id="btn-program-nfc">
+                    <i class="bi ${icon} me-1"></i>Program ${tagLabel}
                 </button>
             </div>
         </div>
-        <div id="nfc-status" class="mt-3"></div>`;
+        <div id="nfc-status"></div>`;
 
     document.getElementById('btn-program-nfc')?.addEventListener('click', async () => {
         const btn = document.getElementById('btn-program-nfc');
         const statusDiv = document.getElementById('nfc-status');
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Programming...';
-        statusDiv.innerHTML = `<div class="alert alert-info"><i class="bi bi-hourglass-split me-2"></i>${isSecure ? 'Configuring SUN/SDM on NTag424 DNA...' : 'Writing NDEF URL to NTag213...'}</div>`;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Programming...';
+        statusDiv.innerHTML = `<div class="alert alert-info py-2 small"><i class="bi bi-hourglass-split me-1"></i>${isSecure ? 'Configuring SUN/SDM...' : 'Writing NDEF URL...'}</div>`;
 
         try {
             const result = await api.post(`/slab/${a.id}/nfc/${apiEndpoint}`, {});
             _currentAssembly = result;
-
             const tag = result.nfc_tag;
+
             if (tag?.status === 'programmed') {
-                statusDiv.innerHTML = `
-                    <div class="alert alert-success">
-                        <i class="bi bi-check-circle me-2"></i>${tagLabel} programmed!
-                        <br><small>UID: ${tag.tag_uid}${isSecure ? ' | SDM: ' + (tag.sdm_configured ? 'Configured' : 'N/A') : ''}</small>
-                    </div>`;
-                setTimeout(() => showCompleteStep(), 1500);
+                statusDiv.innerHTML = `<div class="alert alert-success py-2 small"><i class="bi bi-check-circle me-1"></i>${tagLabel} programmed! UID: <code>${tag.tag_uid}</code></div>`;
+                setTimeout(() => showCompleteStep(), 1200);
             } else {
-                statusDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Failed: ${tag?.error_message || 'Unknown error'}</div>`;
+                statusDiv.innerHTML = `<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle me-1"></i>${tag?.error_message || 'Failed'}</div>`;
                 btn.disabled = false;
-                btn.innerHTML = `<i class="bi ${icon} me-2"></i>Retry`;
+                btn.innerHTML = `<i class="bi ${icon} me-1"></i>Retry`;
             }
         } catch (e) {
-            statusDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>${e.message}</div>`;
+            statusDiv.innerHTML = `<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle me-1"></i>${e.message}</div>`;
             btn.disabled = false;
-            btn.innerHTML = `<i class="bi ${icon} me-2"></i>Retry`;
+            btn.innerHTML = `<i class="bi ${icon} me-1"></i>Retry`;
         }
         await loadQueue();
     });
@@ -391,36 +374,37 @@ async function showCompleteStep() {
 
     body.innerHTML = `
         <div class="text-center py-4">
-            <i class="bi bi-check-circle text-success" style="font-size: 3rem;"></i>
-            <h4 class="mt-3">Slab Assembly Complete</h4>
-            <p class="text-muted">All steps finished for <strong>${a.serial_number}</strong></p>
+            <i class="bi bi-check-circle-fill text-success" style="font-size: 2.5rem;"></i>
+            <h5 class="mt-2 mb-1">Assembly Complete</h5>
+            <p class="text-muted small mb-3"><code>${a.serial_number}</code></p>
 
-            <div class="row justify-content-center mt-4">
-                <div class="col-md-8">
-                    <table class="table text-start">
+            <div class="row justify-content-center">
+                <div class="col-md-6">
+                    <table class="table table-sm text-start mb-3">
                         <tr>
-                            <td><i class="bi bi-printer me-2 text-success"></i>Label Printed</td>
-                            <td>${a.print_job?.status === 'printed' ? '<span class="badge bg-success">Done</span>' : '<span class="badge bg-warning">Pending</span>'}</td>
+                            <td class="text-muted"><i class="bi bi-printer me-1"></i>Label</td>
+                            <td>${a.print_job?.status === 'printed'
+                                ? '<span class="badge bg-success">Printed</span>'
+                                : '<span class="badge bg-secondary">Pending</span>'}</td>
                         </tr>
                         <tr>
-                            <td><i class="bi ${nfcTag?.tag_type === 'ntag424_dna' ? 'bi-shield-lock' : 'bi-nfc'} me-2 text-success"></i>${tagLabel}</td>
+                            <td class="text-muted"><i class="bi ${nfcTag?.tag_type === 'ntag424_dna' ? 'bi-shield-lock' : 'bi-nfc'} me-1"></i>${tagLabel}</td>
                             <td>${nfcTag?.status === 'programmed'
-                                ? `<span class="badge bg-success">Done</span> <small class="text-muted">UID: ${nfcTag.tag_uid}</small>`
-                                : '<span class="badge bg-warning">Pending</span>'}</td>
+                                ? `<span class="badge bg-success">Done</span> <code class="small">${nfcTag.tag_uid}</code>`
+                                : '<span class="badge bg-secondary">Pending</span>'}</td>
                         </tr>
                     </table>
                 </div>
             </div>
 
-            ${a.workflow_status !== 'complete' ? `
-                <button class="btn btn-success btn-lg mt-3" id="btn-finalize">
-                    <i class="bi bi-check2-all me-2"></i>Finalize Assembly
-                </button>
-            ` : '<span class="badge bg-success fs-6 mt-3">Finalized</span>'}
-
-            <div class="mt-3">
+            <div class="d-flex justify-content-center gap-2">
+                ${a.workflow_status !== 'complete' ? `
+                    <button class="btn btn-success" id="btn-finalize">
+                        <i class="bi bi-check2-all me-1"></i>Finalize
+                    </button>
+                ` : '<span class="badge bg-success py-2 px-3">Finalized</span>'}
                 <button class="btn btn-outline-primary" id="btn-new-assembly">
-                    <i class="bi bi-plus-circle me-2"></i>Start New Assembly
+                    <i class="bi bi-plus me-1"></i>New Assembly
                 </button>
             </div>
         </div>`;
@@ -429,11 +413,11 @@ async function showCompleteStep() {
         try {
             const result = await api.post(`/slab/${a.id}/complete`, {});
             _currentAssembly = result;
-            showToast('Slab assembly finalized!', 'success');
+            showToast('Assembly finalized!', 'success');
             await showCompleteStep();
             await loadQueue();
         } catch (e) {
-            showToast('Failed to finalize: ' + e.message, 'danger');
+            showToast('Failed: ' + e.message, 'danger');
         }
     });
 
@@ -452,7 +436,7 @@ async function loadQueue() {
     try {
         const assemblies = await api.get('/slab/queue');
         if (!assemblies || assemblies.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No assemblies yet</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3 small">No assemblies yet</td></tr>';
             return;
         }
 
@@ -462,13 +446,13 @@ async function loadQueue() {
         };
 
         tbody.innerHTML = assemblies.map(a => `
-            <tr class="${_currentAssembly?.id === a.id ? 'table-active' : ''}" style="cursor:pointer" data-id="${a.id}">
-                <td><code>${a.serial_number}</code></td>
-                <td>${a.card?.card_name || '—'}</td>
+            <tr class="${_currentAssembly?.id === a.id ? 'table-active' : ''}">
+                <td><code class="small">${a.serial_number}</code></td>
+                <td class="small">${a.card?.card_name || '—'}</td>
                 <td><span class="badge bg-primary">${a.grade || '—'}</span></td>
                 <td><span class="badge bg-${statusColors[a.workflow_status] || 'secondary'}">${a.workflow_status.replace(/_/g, ' ')}</span></td>
-                <td>
-                    <button class="btn btn-sm btn-outline-primary btn-resume" data-id="${a.id}">
+                <td class="text-end">
+                    <button class="btn btn-sm btn-outline-secondary btn-resume" data-id="${a.id}">
                         ${a.workflow_status === 'complete' ? 'View' : 'Resume'}
                     </button>
                 </td>
@@ -478,9 +462,8 @@ async function loadQueue() {
         tbody.querySelectorAll('.btn-resume').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                const id = btn.dataset.id;
                 try {
-                    const assembly = await api.get(`/slab/${id}`);
+                    const assembly = await api.get(`/slab/${btn.dataset.id}`);
                     _currentAssembly = assembly;
                     switch (assembly.workflow_status) {
                         case 'graded': await showPrintStep(); break;
@@ -495,6 +478,6 @@ async function loadQueue() {
             });
         });
     } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-danger">Error: ${e.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="text-danger small">Error: ${e.message}</td></tr>`;
     }
 }

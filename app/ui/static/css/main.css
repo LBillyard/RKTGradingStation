@@ -674,6 +674,78 @@ body {
 }
 
 /* ============================================================
+   Slab Assembly Stepper
+   ============================================================ */
+.slab-step {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.slab-step-num {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: var(--bs-gray-200);
+    color: var(--text-muted);
+}
+.slab-step.active .slab-step-num {
+    background: var(--primary-blue, #4a90d9);
+    color: #fff;
+}
+.slab-step.active {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+.slab-step.done .slab-step-num {
+    background: var(--bs-success);
+    color: #fff;
+}
+.slab-step.done .slab-step-num::after {
+    content: "\2713";
+}
+.slab-step.done .slab-step-num { font-size: 0; }
+.slab-step.done .slab-step-num::after { font-size: 0.75rem; }
+.slab-step.done {
+    color: var(--bs-success);
+}
+.slab-step-line {
+    flex: 1;
+    height: 2px;
+    background: var(--bs-gray-300);
+    min-width: 20px;
+    max-width: 60px;
+    transition: background 0.2s;
+}
+.slab-step-line.done {
+    background: var(--bs-success);
+}
+.slab-step-label {
+    display: none;
+}
+@media (min-width: 768px) {
+    .slab-step-label { display: inline; }
+}
+
+[data-theme="dark"] .slab-step-num {
+    background: #334155;
+    color: #94a3b8;
+}
+[data-theme="dark"] .slab-step-line {
+    background: #334155;
+}
+
+/* ============================================================
    Responsive Adjustments
    ============================================================ */
 
