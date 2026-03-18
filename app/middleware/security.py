@@ -16,6 +16,9 @@ AUTH_EXEMPT_PATHS = frozenset({
     "/api/docs",
     "/api/docs/oauth2-redirect",
     "/api/openapi.json",
+    "/api/agent/version",
+    "/api/agent/download",
+    "/api/slab/verify",
 })
 
 # Path prefixes that never need auth (static assets, SPA shell)
