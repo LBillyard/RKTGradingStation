@@ -132,8 +132,14 @@ def create_app() -> FastAPI:
             from fastapi.responses import RedirectResponse
             try:
                 import boto3
+                from botocore.config import Config
+                region = app_settings.s3.region or "eu-west-2"
                 # Use explicit creds if set, otherwise fall back to IAM instance role
-                kwargs = {"region_name": app_settings.s3.region or "eu-west-2"}
+                kwargs = {
+                    "region_name": region,
+                    "endpoint_url": f"https://s3.{region}.amazonaws.com",
+                    "config": Config(s3={"addressing_style": "virtual"}),
+                }
                 if app_settings.s3.access_key_id and app_settings.s3.secret_access_key:
                     kwargs["aws_access_key_id"] = app_settings.s3.access_key_id
                     kwargs["aws_secret_access_key"] = app_settings.s3.secret_access_key
