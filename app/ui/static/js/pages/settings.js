@@ -1686,6 +1686,44 @@ async function loadChangelogTab() {
     const entries = [
         {
             date: '2026-03-18',
+            version: 'Platform v1.3',
+            title: 'Training Mode & AI Calibration System',
+            items: [
+                { tag: 'Feature', color: '#22c55e', text: 'Training Mode page — experts enter manual grades, AI grades independently, system shows side-by-side comparison with colour-coded deltas' },
+                { tag: 'Feature', color: '#22c55e', text: 'Calibration Dashboard — aggregate stats, sub-grade delta breakdown, threshold recommendation engine with admin-approved calibration' },
+                { tag: 'Feature', color: '#22c55e', text: 'Ongoing training — every card an expert grades becomes a permanent training datapoint, the system continuously improves' },
+                { tag: 'Analytics', color: '#3b82f6', text: 'Population reports, grade distribution stats, defect heatmaps, and per-operator bias detection via /api/analytics/*' },
+                { tag: 'Analytics', color: '#3b82f6', text: 'Calibration reports with confidence levels (insufficient/low/moderate/high) based on sample count thresholds' },
+                { tag: 'Architecture', color: '#8b5cf6', text: 'Profile override persistence — calibration changes saved to data/calibration/profile_overrides.json, survives restarts' },
+                { tag: 'Architecture', color: '#8b5cf6', text: 'Auto-linking via event subscription — when AI grades a card, training data is automatically matched and deltas computed' },
+                { tag: 'UI', color: '#06b6d4', text: 'Settings page redesigned — removed Laser/Material tab, added Platform Changelog tab, improved sidebar with descriptions' },
+                { tag: 'UI', color: '#06b6d4', text: 'Agent changelog redesigned with collapsible category groups matching panel-style design' },
+            ],
+        },
+        {
+            date: '2026-03-18',
+            version: 'Platform v1.2',
+            title: 'Agent Telemetry, Security & Monitoring Suite',
+            items: [
+                { tag: 'Agent', color: '#ef4444', text: 'Station Agent v1.2.1 with system tray, rocket icon, auto-start, auto-update, and Windows toast notifications' },
+                { tag: 'Telemetry', color: '#8b5cf6', text: 'Session timing, scanner quality monitoring, image tamper detection (SHA-256 + HMAC), chain of custody logging' },
+                { tag: 'Telemetry', color: '#8b5cf6', text: 'Print job tracking with ink usage estimates and offline card cache for connectivity drops' },
+                { tag: 'Infrastructure', color: '#3b82f6', text: 'Agent download via S3 presigned URL with versioned filenames (RKTStationAgent-v1.2.1.exe)' },
+                { tag: 'UI', color: '#06b6d4', text: 'Agent changelog page with version history and download link in sidebar footer' },
+            ],
+        },
+        {
+            date: '2026-03-18',
+            version: 'Platform v1.1',
+            title: 'Slab Assembly & NFC Integration',
+            items: [
+                { tag: 'Workflow', color: '#22c55e', text: 'Slab Assembly page — 4-step wizard: Select Card, Print Insert, Program NFC, Complete' },
+                { tag: 'Hardware', color: '#22c55e', text: 'Epson C6000 printer and NTag213/NTag424 DNA NFC tag support with configurable default tag type' },
+                { tag: 'UI', color: '#06b6d4', text: 'NFC/Printer settings tab in Settings page for tag type, mock mode, and printer configuration' },
+            ],
+        },
+        {
+            date: '2026-03-18',
             version: 'Platform v1.0',
             title: 'Cloud Migration & Multi-Station Architecture',
             items: [
