@@ -114,6 +114,9 @@ def create_app() -> FastAPI:
         from app.api.routes_training import router as training_router
         app.include_router(training_router, prefix="/api/training", tags=["Training"])
 
+        from app.api.routes_enhancements import router as enhancements_router
+        app.include_router(enhancements_router, prefix="/api/enhancements", tags=["Enhancements"])
+
     # Agent + Desktop: hardware routes (scanner, printer, NFC)
     if settings.mode in ("desktop", "agent"):
         from app.api.routes_agent_hw import router as agent_hw_router

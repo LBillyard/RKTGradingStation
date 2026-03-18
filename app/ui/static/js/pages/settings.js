@@ -1686,6 +1686,29 @@ async function loadChangelogTab() {
     const entries = [
         {
             date: '2026-03-18',
+            version: 'Platform v1.4',
+            title: 'Grading Engine Optimisation & Operations Suite',
+            items: [
+                { tag: 'Grading', color: '#22c55e', text: 'Grade Curve Targeting — configurable offset to shift grade distribution toward more 9s and 10s, with taper near 10.0' },
+                { tag: 'Grading', color: '#22c55e', text: 'Smart Rounding — rounds UP when within 0.1 of next increment and AI confidence is below 70%' },
+                { tag: 'Grading', color: '#22c55e', text: 'Defect Diminishing Returns — 4th+ minor defect in same category has 50% less impact, prevents unfair stacking' },
+                { tag: 'Grading', color: '#22c55e', text: 'Vintage vs Modern auto-detection — vintage sets (pre-2010) automatically use lenient profile' },
+                { tag: 'Grading', color: '#22c55e', text: 'Holographic card intelligence — detects holo type (full art, reverse, cosmos) and adjusts surface tolerance up to 50%' },
+                { tag: 'Grading', color: '#22c55e', text: 'Quick Grade Mode — skips deep analysis for cards with initial quality above 92%, speeds up mint cards' },
+                { tag: 'Grading', color: '#22c55e', text: 'Set-specific known issues database — known factory defects (Base Set Charizard print lines) get impact halved' },
+                { tag: 'AI', color: '#8b5cf6', text: 'Grade Explanation Generator — human-readable text explaining why a card received its grade, for customer trust' },
+                { tag: 'AI', color: '#8b5cf6', text: 'Confidence-Based Routing — auto-approve (90%+), standard review (70-90%), senior review (<70%)' },
+                { tag: 'AI', color: '#8b5cf6', text: 'Cross-Validation — flags inconsistent re-grades (delta > 0.5) for review' },
+                { tag: 'AI', color: '#8b5cf6', text: 'Defect Photo Evidence — crops 100x100px region around each defect for operator review' },
+                { tag: 'Operations', color: '#3b82f6', text: 'Smart Queue Prioritisation — higher rarity/value cards graded first automatically' },
+                { tag: 'Operations', color: '#3b82f6', text: 'Daily Grade Target Dashboard — cards graded today, pace (cards/hour), progress toward daily target' },
+                { tag: 'Operations', color: '#3b82f6', text: 'Auto-Slab Routing — cards grading 9+ with 85%+ confidence fast-tracked to slab assembly' },
+                { tag: 'Operations', color: '#3b82f6', text: 'Bulk CSV Import — dealers upload card lists to pre-populate the grading queue' },
+                { tag: 'Operations', color: '#3b82f6', text: 'Scanner Profile Auto-Detection — calibrate per-scanner colour/brightness offsets from reference card' },
+            ],
+        },
+        {
+            date: '2026-03-18',
             version: 'Platform v1.3',
             title: 'Training Mode & AI Calibration System',
             items: [
