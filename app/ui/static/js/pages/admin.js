@@ -59,7 +59,7 @@ function getCurrentOperator() {
 
 function buildLayout() {
     return `
-        <div class="container-fluid py-4">
+        <div class="px-4 py-3">
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="bi bi-people-fill me-2"></i>User Management</h5>
