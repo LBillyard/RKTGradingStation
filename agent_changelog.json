@@ -1,5 +1,25 @@
 [
   {
+    "version": "1.2.1",
+    "date": "2026-03-18",
+    "type": "patch",
+    "title": "Update Notifications & Auto-Update Fix",
+    "changes": [
+      {
+        "category": "fix",
+        "description": "'Check for Updates' now shows a Windows toast notification with the result instead of silently logging — tells you whether an update is available or you're up to date"
+      },
+      {
+        "category": "fix",
+        "description": "Auto-update now triggers for all available updates on startup, not just mandatory ones — the agent will download and apply v1.2.1 automatically"
+      },
+      {
+        "category": "improvement",
+        "description": "Windows toast notification on startup when a new version is detected, before auto-update begins downloading"
+      }
+    ]
+  },
+  {
     "version": "1.2.0",
     "date": "2026-03-18",
     "type": "release",

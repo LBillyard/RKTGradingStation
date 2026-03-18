@@ -123,7 +123,7 @@ def create_app() -> FastAPI:
         @app.get("/api/agent/version")
         async def agent_latest_version():
             return {
-                "latest_version": "1.2.0",
+                "latest_version": "1.2.1",
                 "download_url": "https://rktgradingstation.co.uk/api/agent/download",
                 "release_notes": "Telemetry, scanner quality monitoring, image tamper detection, chain of custody, analytics",
                 "mandatory": False,

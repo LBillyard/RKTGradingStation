@@ -59,8 +59,11 @@ def main() -> None:
     update_info = check_for_update()
     if update_info:
         logger.info(f"Update available: v{update_info['latest_version']}")
-        if update_info.get("mandatory"):
-            auto_update(update_info)
+        _show_notification(
+            "Update Available",
+            f"RKT Station Agent v{update_info['latest_version']} is available. Updating..."
+        )
+        auto_update(update_info)
     else:
         logger.info(f"Agent is up to date (v{AGENT_VERSION})")
 
@@ -135,6 +138,39 @@ def _remove_startup_entry() -> None:
         key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE) as key:
             winreg.DeleteValue(key, "RKTStationAgent")
+    except Exception:
+        pass
+
+
+def _show_notification(title: str, message: str) -> None:
+    """Show a Windows toast notification."""
+    try:
+        from plyer import notification
+        notification.notify(
+            title=title,
+            message=message,
+            app_name=AGENT_NAME,
+            timeout=5,
+        )
+    except ImportError:
+        # Fallback: use powershell toast
+        try:
+            import subprocess
+            ps_cmd = f'''
+            [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+            $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+            $textNodes = $template.GetElementsByTagName("text")
+            $textNodes.Item(0).AppendChild($template.CreateTextNode("{title}")) | Out-Null
+            $textNodes.Item(1).AppendChild($template.CreateTextNode("{message}")) | Out-Null
+            $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
+            [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("RKT Station Agent").Show($toast)
+            '''
+            subprocess.Popen(
+                ["powershell", "-WindowStyle", "Hidden", "-Command", ps_cmd],
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -227,9 +263,13 @@ def _run_tray(settings, logger) -> None:
             info = check_for_update()
             if info:
                 logger.info(f"Update available: v{info['latest_version']}")
+                _show_notification(
+                    "Update Available",
+                    f"v{info['latest_version']} is available (you have v{AGENT_VERSION}). Downloading..."
+                )
                 auto_update(info)
             else:
-                logger.info("Already up to date")
+                _show_notification("Up to Date", f"RKT Station Agent v{AGENT_VERSION} is the latest version.")
 
         def on_toggle_startup(icon, item):
             # Toggle auto-start
