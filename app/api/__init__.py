@@ -119,11 +119,13 @@ def create_app() -> FastAPI:
     logger.info(f"App mode: {settings.mode} — registered routes accordingly")
 
     # Agent version and download endpoints (served by cloud)
+    _AGENT_LATEST = "1.2.1"
+
     if settings.mode in ("desktop", "cloud"):
         @app.get("/api/agent/version")
         async def agent_latest_version():
             return {
-                "latest_version": "1.2.1",
+                "latest_version": _AGENT_LATEST,
                 "download_url": "https://rktgradingstation.co.uk/api/agent/download",
                 "release_notes": "Telemetry, scanner quality monitoring, image tamper detection, chain of custody, analytics",
                 "mandatory": False,
@@ -152,6 +154,7 @@ def create_app() -> FastAPI:
                     Params={
                         "Bucket": app_settings.s3.bucket or "rkt-grading-images",
                         "Key": "downloads/RKTStationAgent-latest.exe",
+                        "ResponseContentDisposition": f"attachment; filename=RKTStationAgent-v{_AGENT_LATEST}.exe",
                     },
                     ExpiresIn=3600,
                 )
