@@ -29,6 +29,9 @@ def build():
     for d in [dist_dir / "RKTStationAgent", build_dir / "RKTStationAgent"]:
         if d.exists():
             shutil.rmtree(d)
+    old_exe = dist_dir / "RKTStationAgent.exe"
+    if old_exe.exists():
+        old_exe.unlink()
 
     # Remove old spec file
     spec_file = Path("RKTStationAgent.spec")
@@ -64,11 +67,9 @@ def build():
     cmd = [
         venv_python, "-m", "PyInstaller",
         "--name", "RKTStationAgent",
-        "--onedir",
+        "--onefile",
         "--noconsole",
         "--icon", "NONE",
-        # Collect the python DLL explicitly
-        "--collect-binaries", "pydantic_core",
         # Include app package as data
         "--add-data", "app;app",
         "--add-data", "agent_version.py;.",
@@ -156,26 +157,14 @@ def build():
         print("\nBuild FAILED!")
         sys.exit(1)
 
-    exe_path = dist_dir / "RKTStationAgent" / "RKTStationAgent.exe"
+    exe_path = dist_dir / "RKTStationAgent.exe"
     if exe_path.exists():
         size_mb = exe_path.stat().st_size / (1024 * 1024)
-
-        # Calculate total dist size
-        total_size = sum(
-            f.stat().st_size for f in (dist_dir / "RKTStationAgent").rglob("*") if f.is_file()
-        ) / (1024 * 1024)
-
-        # Copy config template
-        shutil.copy2("agent.env.example", dist_dir / "RKTStationAgent" / "agent.env.example")
-
-        # Write version file
-        (dist_dir / "RKTStationAgent" / "VERSION").write_text(AGENT_VERSION)
 
         print(f"\n{'='*50}")
         print(f"BUILD SUCCESS!")
         print(f"  Exe:     {exe_path}")
-        print(f"  Exe size: {size_mb:.1f} MB")
-        print(f"  Total:   {total_size:.1f} MB")
+        print(f"  Size:    {size_mb:.1f} MB (single file, no dependencies needed)")
         print(f"  Version: {AGENT_VERSION}")
         print(f"{'='*50}")
     else:
