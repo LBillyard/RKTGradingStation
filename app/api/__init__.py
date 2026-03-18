@@ -132,12 +132,12 @@ def create_app() -> FastAPI:
             from fastapi.responses import RedirectResponse
             try:
                 import boto3
-                s3 = boto3.client(
-                    "s3",
-                    region_name=app_settings.s3.region or "eu-west-2",
-                    aws_access_key_id=app_settings.s3.access_key_id or None,
-                    aws_secret_access_key=app_settings.s3.secret_access_key or None,
-                )
+                # Use explicit creds if set, otherwise fall back to IAM instance role
+                kwargs = {"region_name": app_settings.s3.region or "eu-west-2"}
+                if app_settings.s3.access_key_id and app_settings.s3.secret_access_key:
+                    kwargs["aws_access_key_id"] = app_settings.s3.access_key_id
+                    kwargs["aws_secret_access_key"] = app_settings.s3.secret_access_key
+                s3 = boto3.client("s3", **kwargs)
                 url = s3.generate_presigned_url(
                     "get_object",
                     Params={
@@ -147,11 +147,8 @@ def create_app() -> FastAPI:
                     ExpiresIn=3600,
                 )
                 return RedirectResponse(url)
-            except Exception:
-                # Fallback: serve from static if S3 not configured
-                static_path = UI_DIR / "static" / "downloads" / "RKTStationAgent-Setup.exe"
-                if static_path.exists():
-                    return FileResponse(str(static_path), filename="RKTStationAgent-Setup.exe")
+            except Exception as e:
+                logger.error(f"Agent download failed: {e}")
                 return JSONResponse({"error": "Agent download not available"}, status_code=404)
 
     # Robots.txt — block all search engine indexing
