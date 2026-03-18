@@ -1,5 +1,53 @@
 [
   {
+    "version": "1.2.0",
+    "date": "2026-03-18",
+    "type": "release",
+    "title": "Telemetry, Security & Analytics Suite",
+    "changes": [
+      {
+        "category": "feature",
+        "description": "Session timing — tracks how long each card takes from scan to slab completion, with per-operator productivity stats (cards/hour, averages, fastest/slowest)"
+      },
+      {
+        "category": "feature",
+        "description": "Scanner quality monitoring — analyzes brightness, contrast, sharpness, and noise for every scan. Warns when quality degrades from baseline calibration"
+      },
+      {
+        "category": "feature",
+        "description": "Scanner calibration checks — scan a reference card to establish baseline quality metrics. Future scans compared against this baseline"
+      },
+      {
+        "category": "feature",
+        "description": "Image tamper detection — every scanned image is immediately SHA-256 hashed and HMAC-signed with the station identity. Cryptographic proof of origin"
+      },
+      {
+        "category": "feature",
+        "description": "Chain of custody logging — records exactly which station, operator, scanner, and time produced each scan. Full audit trail per card serial"
+      },
+      {
+        "category": "feature",
+        "description": "Print job tracking with ink usage estimates — tracks total prints, estimates remaining ink, and predicts when cartridge replacement is needed"
+      },
+      {
+        "category": "feature",
+        "description": "Offline card cache — caches failed cloud API calls locally and syncs when connectivity resumes. Manual sync trigger available"
+      },
+      {
+        "category": "feature",
+        "description": "Cloud analytics endpoints — population reports, grade distribution, defect heatmaps, and operator bias detection"
+      },
+      {
+        "category": "architecture",
+        "description": "Local telemetry SQLite database (data/agent_telemetry.db) stores all metrics separately from main app DB"
+      },
+      {
+        "category": "architecture",
+        "description": "Agent /status endpoint now includes telemetry summary (productivity stats, pending sync count)"
+      }
+    ]
+  },
+  {
     "version": "1.1.0",
     "date": "2026-03-18",
     "type": "release",

@@ -108,6 +108,9 @@ def create_app() -> FastAPI:
         app.include_router(pdf_router, prefix="/api/reports", tags=["Reports"])
         app.include_router(slab_router, prefix="/api/slab", tags=["Slab Assembly"])
 
+        from app.api.routes_analytics import router as analytics_router
+        app.include_router(analytics_router, prefix="/api/analytics", tags=["Analytics"])
+
     # Agent + Desktop: hardware routes (scanner, printer, NFC)
     if settings.mode in ("desktop", "agent"):
         from app.api.routes_agent_hw import router as agent_hw_router
@@ -120,9 +123,9 @@ def create_app() -> FastAPI:
         @app.get("/api/agent/version")
         async def agent_latest_version():
             return {
-                "latest_version": "1.1.0",
+                "latest_version": "1.2.0",
                 "download_url": "https://rktgradingstation.co.uk/api/agent/download",
-                "release_notes": "System tray with rocket icon, hardware status, auto-start on Windows boot",
+                "release_notes": "Telemetry, scanner quality monitoring, image tamper detection, chain of custody, analytics",
                 "mandatory": False,
             }
 

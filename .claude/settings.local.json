@@ -42,7 +42,10 @@
       "Bash(timeout 10 /c/Users/Shadow/Desktop/LazerGradingSoftware/dist/RKTStationAgent.exe)",
       "Bash(timeout 8 \"/c/Users/Shadow/Downloads/RKTStationAgent-v1.0.0 \\(1\\).exe\")",
       "Bash(echo \"EXIT_CODE: $?\")",
-      "Bash(curl -s http://localhost:8742/agent/status)"
+      "Bash(curl -s http://localhost:8742/agent/status)",
+      "Bash(powershell -Command \"Get-Process -Name RKTStationAgent -ErrorAction SilentlyContinue | Stop-Process -Force\")",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 8742 -ErrorAction SilentlyContinue | Select-Object OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }\")",
+      "Bash(curl -s http://localhost:8742/)"
     ]
   }
 }

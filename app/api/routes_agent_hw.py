@@ -87,11 +87,23 @@ async def agent_status():
     printers = await asyncio.to_thread(printer.list_printers)
     nfc_readers = await asyncio.to_thread(nfc.list_readers)
 
+    # Get telemetry summary
+    telemetry = {}
+    try:
+        from app.services.agent.telemetry import get_productivity_stats, get_pending_sync
+        telemetry = {
+            "productivity": get_productivity_stats(),
+            "pending_sync": len(get_pending_sync()),
+        }
+    except Exception:
+        pass
+
     return {
         "status": "online",
         "version": AGENT_VERSION,
         "station_id": settings.station_id,
         "mode": settings.mode,
+        "telemetry": telemetry,
         "hardware": {
             "scanner": {
                 "mock_mode": settings.scanner.mock_mode,
@@ -281,3 +293,211 @@ async def program_nfc_tag(req: NfcProgramRequest):
     except Exception as e:
         logger.error(f"NFC programming failed: {e}")
         raise HTTPException(500, f"NFC programming failed: {e}")
+
+
+# ---- Telemetry & Monitoring ----
+
+@router.get("/telemetry/productivity")
+async def get_productivity():
+    """Get operator productivity stats (cards/hour, timing breakdowns)."""
+    from app.services.agent.telemetry import get_productivity_stats
+    return get_productivity_stats()
+
+
+@router.get("/telemetry/metrics")
+async def get_telemetry_metrics(metric_type: Optional[str] = None, limit: int = 100):
+    """Get recent telemetry metrics."""
+    from app.services.agent.telemetry import get_metrics
+    return {"metrics": get_metrics(metric_type, limit)}
+
+
+@router.post("/telemetry/session/start")
+async def start_grading_session(operator_name: str = "", station_id: str = ""):
+    """Start timing a new grading session."""
+    from app.services.agent.telemetry import start_session
+    session = start_session(operator_name, station_id or settings.station_id)
+    return {"session_id": session.id, "started_at": session.started_at}
+
+
+@router.post("/telemetry/session/{session_id}/update")
+async def update_grading_session(session_id: str, phase: str):
+    """Update session timing (phase: scan_started, scan_completed, grade_started, etc)."""
+    from app.services.agent.telemetry import update_session
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    valid_phases = [
+        "scan_started_at", "scan_completed_at", "grade_started_at",
+        "grade_completed_at", "print_started_at", "print_completed_at",
+        "nfc_started_at", "nfc_completed_at",
+    ]
+    field = f"{phase}_at" if not phase.endswith("_at") else phase
+    if field not in valid_phases:
+        raise HTTPException(400, f"Invalid phase. Use: {valid_phases}")
+    session = update_session(session_id, **{field: now})
+    if not session:
+        raise HTTPException(404, "Session not found")
+    return {"session_id": session_id, field: now}
+
+
+@router.post("/telemetry/session/{session_id}/complete")
+async def complete_grading_session(session_id: str):
+    """Complete a grading session and calculate total time."""
+    from app.services.agent.telemetry import complete_session
+    session = complete_session(session_id)
+    if not session:
+        raise HTTPException(404, "Session not found")
+    return {
+        "session_id": session.id,
+        "total_seconds": session.total_seconds,
+        "status": session.status,
+    }
+
+
+# ---- Scanner Quality ----
+
+@router.get("/scanner/quality")
+async def get_scanner_quality():
+    """Get scanner quality trend data."""
+    from app.services.agent.telemetry import get_scanner_quality_trend
+    return {"readings": get_scanner_quality_trend()}
+
+
+@router.post("/scanner/quality/check")
+async def check_scan_quality(image_path: str = ""):
+    """Analyze a scanned image for quality metrics."""
+    from app.services.agent.image_security import analyze_scan_quality
+    from app.services.agent.telemetry import record_scan_quality
+
+    if not image_path:
+        # Use the most recent scan if no path provided
+        return {"error": "Provide image_path parameter"}
+
+    quality = await asyncio.to_thread(analyze_scan_quality, image_path)
+    record_scan_quality(
+        brightness=quality["brightness"],
+        contrast=quality["contrast"],
+        sharpness=quality["sharpness"],
+        noise_level=quality["noise_level"],
+        station_id=settings.station_id,
+    )
+    return quality
+
+
+@router.post("/scanner/calibrate")
+async def calibration_check(image_path: str):
+    """Run a calibration check against a reference card scan."""
+    from app.services.agent.image_security import analyze_scan_quality
+    from app.services.agent.telemetry import record_scan_quality
+
+    quality = await asyncio.to_thread(analyze_scan_quality, image_path)
+    record_scan_quality(
+        brightness=quality["brightness"],
+        contrast=quality["contrast"],
+        sharpness=quality["sharpness"],
+        noise_level=quality["noise_level"],
+        station_id=settings.station_id,
+        is_calibration=True,
+    )
+    return {**quality, "type": "calibration_baseline"}
+
+
+# ---- Image Security ----
+
+@router.post("/security/hash")
+async def hash_scanned_image(image_path: str, operator_name: str = ""):
+    """Hash and sign a scanned image for tamper detection."""
+    from app.services.agent.image_security import hash_image, sign_image
+    from app.services.agent.telemetry import log_custody_event
+
+    img_hash = await asyncio.to_thread(hash_image, image_path)
+    signed = sign_image(img_hash, settings.station_id, operator_name)
+
+    # Log custody event
+    log_custody_event(
+        event_type="image_captured",
+        operator_name=operator_name,
+        station_id=settings.station_id,
+        image_hash=img_hash,
+        details=f"Signed at {signed['timestamp']}",
+    )
+
+    return signed
+
+
+@router.post("/security/verify")
+async def verify_image(image_path: str, original_hash: str, signature: str,
+                       station_id: str = "", operator: str = "", timestamp: str = ""):
+    """Verify image integrity against a signed record."""
+    from app.services.agent.image_security import verify_image_integrity
+
+    signed_record = {
+        "image_hash": original_hash,
+        "station_id": station_id,
+        "operator": operator,
+        "timestamp": timestamp,
+        "signature": signature,
+    }
+    result = await asyncio.to_thread(verify_image_integrity, image_path, signed_record)
+    return result
+
+
+# ---- Chain of Custody ----
+
+@router.get("/custody/{card_serial}")
+async def get_card_custody(card_serial: str):
+    """Get the full chain of custody for a card."""
+    from app.services.agent.telemetry import get_custody_chain
+    return {"card_serial": card_serial, "events": get_custody_chain(card_serial)}
+
+
+@router.post("/custody/log")
+async def log_custody(event_type: str, card_serial: str = "", operator_name: str = "", details: str = ""):
+    """Log a custody event manually."""
+    from app.services.agent.telemetry import log_custody_event
+    log_custody_event(
+        event_type=event_type,
+        card_serial=card_serial,
+        operator_name=operator_name,
+        station_id=settings.station_id,
+        details=details,
+    )
+    return {"status": "logged"}
+
+
+# ---- Offline Cache ----
+
+@router.get("/cache/pending")
+async def get_pending_cache():
+    """Get items waiting to sync to the cloud."""
+    from app.services.agent.telemetry import get_pending_sync
+    pending = get_pending_sync()
+    return {"pending_count": len(pending), "items": pending[:20]}
+
+
+@router.post("/cache/sync")
+async def sync_to_cloud():
+    """Manually trigger sync of cached items to the cloud."""
+    from app.services.agent.telemetry import sync_cached_items
+    result = sync_cached_items(settings.nfc.verify_base_url.rsplit("/", 1)[0])
+    return result
+
+
+# ---- Print Tracking ----
+
+@router.get("/print/stats")
+async def get_print_stats():
+    """Get print job statistics and ink usage estimates."""
+    from app.services.agent.telemetry import get_metrics
+    print_metrics = get_metrics("print")
+    total_prints = len(print_metrics)
+
+    # Rough ink estimate: ~0.5ml per label, C6000 has ~50ml per cartridge
+    estimated_ink_used_ml = total_prints * 0.5
+    estimated_remaining_pct = max(0, 100 - (estimated_ink_used_ml / 50 * 100))
+
+    return {
+        "total_prints": total_prints,
+        "estimated_ink_used_ml": round(estimated_ink_used_ml, 1),
+        "estimated_remaining_pct": round(estimated_remaining_pct, 1),
+        "labels_until_empty": max(0, int((50 - estimated_ink_used_ml) / 0.5)),
+    }
