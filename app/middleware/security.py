@@ -18,6 +18,7 @@ AUTH_EXEMPT_PATHS = frozenset({
     "/api/openapi.json",
     "/api/agent/version",
     "/api/agent/download",
+    "/api/agent/changelog",
     "/api/slab/verify",
 })
 

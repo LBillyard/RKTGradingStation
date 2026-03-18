@@ -1,0 +1,42 @@
+[
+  {
+    "version": "1.0.0",
+    "date": "2026-03-18",
+    "type": "release",
+    "title": "Initial Release",
+    "changes": [
+      {
+        "category": "feature",
+        "description": "Scanner integration via Windows Image Acquisition (WIA) — supports Canon LiDE 400 and other WIA-compatible scanners"
+      },
+      {
+        "category": "feature",
+        "description": "Epson C6000 label printer support via Windows GDI printing — renders and prints slab insert labels at up to 1200 DPI"
+      },
+      {
+        "category": "feature",
+        "description": "NFC tag programming via PC/SC (ACR1252U reader) — supports NTag213 (simple URL) and NTag424 DNA (SUN/SDM secure cryptographic URL)"
+      },
+      {
+        "category": "feature",
+        "description": "System tray mode (--tray flag) — runs silently in the Windows taskbar with status menu"
+      },
+      {
+        "category": "feature",
+        "description": "Auto-update system — checks cloud server for new versions on startup, downloads and applies updates automatically"
+      },
+      {
+        "category": "feature",
+        "description": "Mock mode for all hardware — develop and test without physical scanner, printer, or NFC reader connected"
+      },
+      {
+        "category": "feature",
+        "description": "Hardware status endpoint (/agent/status) — reports connected devices, mock mode state, and agent version"
+      },
+      {
+        "category": "feature",
+        "description": "WebSocket-ready architecture for real-time browser communication with the cloud-hosted grading station"
+      }
+    ]
+  }
+]

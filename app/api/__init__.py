@@ -151,6 +151,15 @@ def create_app() -> FastAPI:
                 logger.error(f"Agent download failed: {e}")
                 return JSONResponse({"error": "Agent download not available"}, status_code=404)
 
+        @app.get("/api/agent/changelog")
+        async def agent_changelog():
+            """Return the agent changelog."""
+            import json
+            changelog_path = Path(__file__).parent.parent.parent / "agent_changelog.json"
+            if changelog_path.exists():
+                return json.loads(changelog_path.read_text(encoding="utf-8"))
+            return []
+
     # Robots.txt — block all search engine indexing
     @app.get("/robots.txt")
     async def robots_txt():
