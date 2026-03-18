@@ -120,9 +120,9 @@ def create_app() -> FastAPI:
         @app.get("/api/agent/version")
         async def agent_latest_version():
             return {
-                "latest_version": "1.0.3",
+                "latest_version": "1.1.0",
                 "download_url": "https://rktgradingstation.co.uk/api/agent/download",
-                "release_notes": "Fixed Python DLL error, noconsole crash, and S3 download redirect",
+                "release_notes": "System tray with rocket icon, hardware status, auto-start on Windows boot",
                 "mandatory": False,
             }
 

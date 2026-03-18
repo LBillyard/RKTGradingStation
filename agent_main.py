@@ -1,12 +1,12 @@
 """RKT Station Agent — Local hardware bridge for the cloud-hosted grading station.
 
-Runs as a small background service on Windows PCs with connected hardware
+Runs as a system tray application on Windows PCs with connected hardware
 (scanner, printer, NFC reader). The browser-based UI at rktgradingstation.co.uk
 communicates with this agent via localhost:8742 for hardware operations.
 
 Usage:
-    python agent_main.py          # Run with console output
-    python agent_main.py --tray   # Run with system tray icon (background)
+    RKTStationAgent.exe              # Normal launch (tray mode)
+    RKTStationAgent.exe --console    # Debug mode with console output
 """
 
 import io
@@ -14,9 +14,11 @@ import logging
 import os
 import sys
 import threading
+import time
+import webbrowser
 from pathlib import Path
 
-# Fix for PyInstaller --noconsole: sys.stdout/stderr are None which crashes uvicorn logging
+# Fix for PyInstaller --noconsole: sys.stdout/stderr are None
 if sys.stdout is None:
     sys.stdout = io.StringIO()
 if sys.stderr is None:
@@ -24,12 +26,15 @@ if sys.stderr is None:
 
 # Ensure app is importable
 if getattr(sys, 'frozen', False):
-    # PyInstaller: use the exe's directory
     sys.path.insert(0, str(Path(sys.executable).parent))
 else:
     sys.path.insert(0, str(Path(__file__).parent))
 
 from agent_version import AGENT_VERSION, AGENT_NAME, check_for_update, auto_update
+
+# Globals for tray status
+_server_running = False
+_cloud_url = "https://rktgradingstation.co.uk"
 
 
 def main() -> None:
@@ -44,29 +49,28 @@ def main() -> None:
     logger.info("=" * 50)
     logger.info(f"{AGENT_NAME} v{AGENT_VERSION}")
     logger.info(f"Station ID: {settings.station_id or 'not set'}")
-    logger.info(f"Scanner mock: {settings.scanner.mock_mode}")
-    logger.info(f"Printer mock: {settings.printer.mock_mode}")
-    logger.info(f"NFC mock: {settings.nfc.mock_mode}")
     logger.info("=" * 50)
 
-    # Check for updates on startup
+    # Ensure auto-start on Windows boot
+    _ensure_startup_entry()
+
+    # Check for updates
     logger.info("Checking for updates...")
     update_info = check_for_update()
     if update_info:
-        logger.info(
-            f"Update available: v{update_info['latest_version']} "
-            f"(current: v{AGENT_VERSION})"
-        )
+        logger.info(f"Update available: v{update_info['latest_version']}")
         if update_info.get("mandatory"):
             auto_update(update_info)
-        else:
-            logger.info("Optional update — will apply on next restart")
     else:
         logger.info(f"Agent is up to date (v{AGENT_VERSION})")
 
-    use_tray = "--tray" in sys.argv
+    console_mode = "--console" in sys.argv
 
-    if use_tray:
+    if console_mode:
+        # Debug mode: just run the server with console output
+        _run_server(settings)
+    else:
+        # Normal mode: server in background, tray in foreground
         server_thread = threading.Thread(
             target=_run_server,
             args=(settings,),
@@ -74,9 +78,21 @@ def main() -> None:
             name="agent-server",
         )
         server_thread.start()
+
+        # Wait for server to start
+        for _ in range(30):
+            try:
+                import httpx
+                r = httpx.get("http://localhost:8742/agent/status", timeout=1.0)
+                if r.status_code == 200:
+                    global _server_running
+                    _server_running = True
+                    break
+            except Exception:
+                pass
+            time.sleep(0.3)
+
         _run_tray(settings, logger)
-    else:
-        _run_server(settings)
 
 
 def _run_server(settings) -> None:
@@ -94,38 +110,193 @@ def _run_server(settings) -> None:
     )
 
 
+def _ensure_startup_entry() -> None:
+    """Add the agent to Windows startup via registry."""
+    if not getattr(sys, 'frozen', False):
+        return  # Only for packaged exe
+
+    try:
+        import winreg
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        exe_path = sys.executable
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE) as key:
+            winreg.SetValueEx(key, "RKTStationAgent", 0, winreg.REG_SZ, f'"{exe_path}"')
+
+        logging.getLogger(__name__).info("Startup entry registered")
+    except Exception as e:
+        logging.getLogger(__name__).debug(f"Could not set startup entry: {e}")
+
+
+def _remove_startup_entry() -> None:
+    """Remove the agent from Windows startup."""
+    try:
+        import winreg
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE) as key:
+            winreg.DeleteValue(key, "RKTStationAgent")
+    except Exception:
+        pass
+
+
+def _get_hardware_summary() -> str:
+    """Get a one-line hardware status summary."""
+    try:
+        import httpx
+        r = httpx.get("http://localhost:8742/agent/status", timeout=2.0)
+        data = r.json()
+        hw = data.get("hardware", {})
+
+        scanner = hw.get("scanner", {})
+        printer = hw.get("printer", {})
+        nfc = hw.get("nfc", {})
+
+        parts = []
+        s_devs = scanner.get("devices", [])
+        if scanner.get("mock_mode"):
+            parts.append("Scanner: Mock")
+        elif s_devs:
+            parts.append(f"Scanner: {len(s_devs)} found")
+        else:
+            parts.append("Scanner: None")
+
+        p_list = printer.get("printers", [])
+        if printer.get("mock_mode"):
+            parts.append("Printer: Mock")
+        elif p_list:
+            parts.append(f"Printer: {p_list[0][:20]}")
+        else:
+            parts.append("Printer: None")
+
+        n_list = nfc.get("readers", [])
+        if nfc.get("mock_mode"):
+            parts.append("NFC: Mock")
+        elif n_list:
+            parts.append("NFC: Connected")
+        else:
+            parts.append("NFC: None")
+
+        return " | ".join(parts)
+    except Exception:
+        return "Status unavailable"
+
+
+def _load_icon():
+    """Load the rocket icon for the tray."""
+    from PIL import Image as PilImage
+
+    # Try to load from bundled icon file
+    icon_paths = [
+        Path(sys.executable).parent / "rkt_agent.ico" if getattr(sys, 'frozen', False) else None,
+        Path(__file__).parent / "rkt_agent.ico",
+        Path(__file__).parent / "app" / "ui" / "static" / "img" / "rkt-agent-icon.png",
+    ]
+    for p in icon_paths:
+        if p and p.exists():
+            return PilImage.open(str(p))
+
+    # Fallback: generate a simple blue circle with R
+    img = PilImage.new("RGBA", (64, 64), (0, 0, 0, 0))
+    from PIL import ImageDraw
+    draw = ImageDraw.Draw(img)
+    draw.ellipse([4, 4, 60, 60], fill=(59, 130, 246, 255))
+    try:
+        from PIL import ImageFont
+        font = ImageFont.truetype("arial.ttf", 32)
+        draw.text((18, 10), "R", fill=(255, 255, 255), font=font)
+    except Exception:
+        pass
+    return img
+
+
 def _run_tray(settings, logger) -> None:
-    """Run system tray icon (blocks until quit)."""
+    """Run system tray icon with status menu."""
     try:
         import pystray
-        from PIL import Image as PilImage
+        from pystray import MenuItem, Menu
 
-        icon_img = PilImage.new("RGB", (64, 64), color=(34, 139, 34))
+        icon_img = _load_icon()
+
+        def on_open_grading(icon, item):
+            webbrowser.open(_cloud_url)
+
+        def on_open_status(icon, item):
+            webbrowser.open("http://localhost:8742/agent/status")
+
+        def on_check_update(icon, item):
+            info = check_for_update()
+            if info:
+                logger.info(f"Update available: v{info['latest_version']}")
+                auto_update(info)
+            else:
+                logger.info("Already up to date")
+
+        def on_toggle_startup(icon, item):
+            # Toggle auto-start
+            try:
+                import winreg
+                key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_READ) as key:
+                    try:
+                        winreg.QueryValueEx(key, "RKTStationAgent")
+                        # Currently enabled, disable it
+                        _remove_startup_entry()
+                        logger.info("Auto-start disabled")
+                    except FileNotFoundError:
+                        # Currently disabled, enable it
+                        _ensure_startup_entry()
+                        logger.info("Auto-start enabled")
+            except Exception:
+                _ensure_startup_entry()
+
+        def is_startup_enabled(item):
+            try:
+                import winreg
+                key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_READ) as key:
+                    winreg.QueryValueEx(key, "RKTStationAgent")
+                    return True
+            except Exception:
+                return False
 
         def on_quit(icon, item):
+            _remove_startup_entry() if False else None  # Don't remove on quit, only on toggle
             icon.stop()
 
-        def on_status(icon, item):
-            logger.info("Agent is running on localhost:8742")
+        def get_status_text(item):
+            return _get_hardware_summary()
 
-        menu = pystray.Menu(
-            pystray.MenuItem(f"{AGENT_NAME} v{AGENT_VERSION}", None, enabled=False),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Status: Online", on_status),
-            pystray.MenuItem(f"Station: {settings.station_id or 'default'}", None, enabled=False),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Quit", on_quit),
+        server_status = "Running on localhost:8742" if _server_running else "Starting..."
+        station_label = f"Station: {settings.station_id}" if settings.station_id else "Station: Default"
+
+        menu = Menu(
+            MenuItem(f"{AGENT_NAME} v{AGENT_VERSION}", None, enabled=False),
+            MenuItem(station_label, None, enabled=False),
+            Menu.SEPARATOR,
+            MenuItem(f"Server: {server_status}", None, enabled=False),
+            MenuItem(lambda text: _get_hardware_summary(), None, enabled=False),
+            Menu.SEPARATOR,
+            MenuItem("Open Grading Station", on_open_grading, default=True),
+            MenuItem("View Agent Status", on_open_status),
+            MenuItem("Check for Updates", on_check_update),
+            Menu.SEPARATOR,
+            MenuItem("Start with Windows", on_toggle_startup, checked=is_startup_enabled),
+            MenuItem("Quit", on_quit),
         )
 
-        icon = pystray.Icon("rkt-agent", icon_img, f"{AGENT_NAME} v{AGENT_VERSION}", menu)
-        logger.info("System tray icon active")
+        icon = pystray.Icon(
+            "rkt-agent",
+            icon_img,
+            f"{AGENT_NAME} v{AGENT_VERSION}",
+            menu,
+        )
+        logger.info("System tray active")
         icon.run()
+
     except ImportError:
-        logger.warning("pystray not installed — running without system tray")
-        logger.info("Agent running on localhost:8742. Press Ctrl+C to stop.")
+        logger.warning("pystray not installed — running headless")
         try:
             while True:
-                import time
                 time.sleep(1)
         except KeyboardInterrupt:
             pass

@@ -69,7 +69,9 @@ def build():
         "--name", "RKTStationAgent",
         "--onefile",
         "--noconsole",
-        "--icon", "NONE",
+        "--icon", "rkt_agent.ico",
+        # Bundle the icon file
+        "--add-data", "rkt_agent.ico;.",
         # Include app package as data
         "--add-data", "app;app",
         "--add-data", "agent_version.py;.",

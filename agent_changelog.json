@@ -1,5 +1,45 @@
 [
   {
+    "version": "1.1.0",
+    "date": "2026-03-18",
+    "type": "release",
+    "title": "System Tray, Auto-Start & Rocket Icon",
+    "changes": [
+      {
+        "category": "feature",
+        "description": "Custom rocket icon in the Windows system tray — blue circle with white rocket, visible at all icon sizes"
+      },
+      {
+        "category": "feature",
+        "description": "Rich tray menu showing: version, station ID, server status, live hardware summary (scanner/printer/NFC), and quick links"
+      },
+      {
+        "category": "feature",
+        "description": "Auto-start on Windows boot — agent registers itself in the Windows startup registry on first run"
+      },
+      {
+        "category": "feature",
+        "description": "'Start with Windows' toggle in tray menu — easily enable/disable auto-start without editing the registry manually"
+      },
+      {
+        "category": "feature",
+        "description": "'Open Grading Station' menu item — launches rktgradingstation.co.uk in your default browser with one click"
+      },
+      {
+        "category": "feature",
+        "description": "'Check for Updates' menu item — manually trigger an update check from the tray"
+      },
+      {
+        "category": "improvement",
+        "description": "Double-clicking the tray icon opens the grading station website directly"
+      },
+      {
+        "category": "architecture",
+        "description": "Agent exe now has the rocket icon embedded (visible in taskbar, file explorer, and Alt+Tab)"
+      }
+    ]
+  },
+  {
     "version": "1.0.3",
     "date": "2026-03-18",
     "type": "patch",
