@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class ContourDetector:
     """Detect the card boundary in a scanner image."""
 
-    def __init__(self, min_area_ratio: float = 0.1, blur_kernel: int = 5):
+    def __init__(self, min_area_ratio: float = 0.03, blur_kernel: int = 5):
         self.min_area_ratio = min_area_ratio
         self.blur_kernel = blur_kernel
 

@@ -490,9 +490,9 @@ class GradingEngine:
         })
 
         logger.info(
-            "Grading complete: final=%.1f (raw=%.2f, cap=%s, defects=%d, back=%s, holo=%s)",
-            grade_result.final_grade, grade_result.raw_score,
-            defect_cap, len(real_defects),
+            "Grading complete: final=%.1f (method=%s, defects=%d, back=%s, holo=%s)",
+            result["final_grade"], result.get("grading_method", "opencv"),
+            result["defect_count"],
             back_image_path is not None and back_corner_result is not None,
             is_holo_detected,
         )
