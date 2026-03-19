@@ -4,7 +4,7 @@
  * Flow: Scan/Upload Front → (optional) Scan/Upload Back → Process → Report
  * Supports: single-card, multi-card, dual-side, quick-scan→high-res
  */
-import { api } from '../api.js';
+import { api, agent, isCloudMode } from '../api.js';
 import { ImageViewer } from '../image-viewer.js';
 import { createGradeBadge, createAuthBadge, createStatusBadge, showToast } from '../components.js';
 
@@ -178,6 +178,35 @@ async function checkScanner() {
     const scanFrontBtn = document.getElementById('btn-scan-front');
     const scanBackBtn = document.getElementById('btn-scan-back');
     const smartScanBtn = document.getElementById('btn-smart-scan');
+
+    // In cloud mode, check the agent for scanner status
+    if (isCloudMode && agent.connected) {
+        try {
+            const status = await agent.request('GET', '/status');
+            const scanner = status?.hardware?.scanner;
+            const devices = scanner?.devices || [];
+            const hasReal = devices.some(d => d.is_connected);
+
+            if (hasReal && !scanner?.mock_mode) {
+                badge.className = 'badge bg-success';
+                badge.textContent = devices[0]?.name || 'Scanner Ready';
+                scanFrontBtn.disabled = false;
+                if (state.frontImagePath) scanBackBtn.disabled = false;
+                smartScanBtn.disabled = false;
+            } else if (scanner?.mock_mode) {
+                badge.className = 'badge bg-info text-dark';
+                badge.textContent = 'Agent: Mock Mode';
+                scanFrontBtn.disabled = false;
+                smartScanBtn.disabled = false;
+            } else {
+                badge.className = 'badge bg-warning text-dark';
+                badge.textContent = 'No scanner on station';
+            }
+            return;
+        } catch { /* fall through */ }
+    }
+
+    // Desktop mode or no agent
     try {
         const res = await api.get('/scan/devices/list');
         const hasReal = res.real_devices && res.real_devices.length > 0;
@@ -252,7 +281,40 @@ async function handleScan(side, container) {
         const preset = document.getElementById('scan-preset')?.value || 'detailed';
         const dpiMap = { fast_production: 300, detailed: 600, authenticity: 1200 };
         const dpi = dpiMap[preset] || 600;
-        const res = await api.request('POST', `/scan/${state.sessionId}/acquire?side=${side}&dpi=${dpi}`, null, { timeout: 300000 });
+
+        let res;
+        if (isCloudMode && agent.connected) {
+            // Cloud mode: scan via local agent, then upload to cloud
+            if (preview) {
+                preview.innerHTML = `
+                    <div class="text-center">
+                        <div class="spinner-border text-light mb-2" style="width:2rem;height:2rem;"></div>
+                        <div class="text-light small">Scanning via station agent...</div>
+                    </div>`;
+            }
+            const scanResult = await agent.scan(dpi);
+            if (scanResult.status !== 'success' || !scanResult.image_data) {
+                throw new Error(scanResult.error || 'Scan failed — check the scanner');
+            }
+            // Upload scanned image to cloud
+            if (preview) {
+                preview.innerHTML = `
+                    <div class="text-center">
+                        <div class="spinner-border text-light mb-2" style="width:2rem;height:2rem;"></div>
+                        <div class="text-light small">Uploading to cloud...</div>
+                    </div>`;
+            }
+            const binary = atob(scanResult.image_data);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const blob = new Blob([bytes], { type: 'image/png' });
+            const file = new File([blob], `${side}_scan.png`, { type: 'image/png' });
+            res = await api.uploadFile(`/scan/${state.sessionId}/upload?side=${side}&dpi=${dpi}`, file);
+        } else {
+            // Desktop mode: scan directly via local server
+            res = await api.request('POST', `/scan/${state.sessionId}/acquire?side=${side}&dpi=${dpi}`, null, { timeout: 300000 });
+        }
+
         if (side === 'front') {
             state.frontImageId = res.image_id;
             state.frontImagePath = res.path;
