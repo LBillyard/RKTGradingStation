@@ -180,7 +180,7 @@ async function checkScanner() {
     const smartScanBtn = document.getElementById('btn-smart-scan');
 
     // In cloud mode, check the agent for scanner status
-    if (isCloudMode && agent.connected) {
+    if (isCloudMode) {
         try {
             const status = await agent.request('GET', '/status');
             const scanner = status?.hardware?.scanner;
@@ -283,7 +283,7 @@ async function handleScan(side, container) {
         const dpi = dpiMap[preset] || 600;
 
         let res;
-        if (isCloudMode && agent.connected) {
+        if (isCloudMode) {
             // Cloud mode: scan via local agent, then upload to cloud
             if (preview) {
                 preview.innerHTML = `
