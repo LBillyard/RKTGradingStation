@@ -109,8 +109,8 @@ function renderScanPhase(container) {
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">Scan Preset</label>
                                 <select class="form-select" id="scan-preset">
-                                    <option value="detailed">Detailed (600 DPI)</option>
-                                    <option value="fast_production" selected>Fast Production (300 DPI)</option>
+                                    <option value="detailed" selected>Detailed (600 DPI)</option>
+                                    <option value="fast_production">Fast Production (300 DPI)</option>
                                     <option value="authenticity">Authenticity (1200 DPI)</option>
                                 </select>
                             </div>
@@ -293,18 +293,35 @@ async function handleScan(side, container) {
                     </div>`;
             }
             const scanResult = await agent.scan(dpi);
-            if (scanResult.status !== 'success' || !scanResult.image_data) {
+            if (scanResult.status !== 'success') {
                 throw new Error(scanResult.error || 'Scan failed — check the scanner');
             }
+
+            // Agent returns cropped card images or full-bed fallback
+            const imageB64 = scanResult.cards
+                ? scanResult.cards[0].image_data  // Use first cropped card
+                : scanResult.image_data;
+
+            if (!imageB64) {
+                throw new Error('No image data received from scanner');
+            }
+
+            // Store card count for multi-card handling
+            if (scanResult.cards && scanResult.cards.length > 1) {
+                state._agentCards = scanResult.cards;
+                state.multiMode = true;
+            }
+
             // Upload scanned image to cloud
             if (preview) {
+                const cardLabel = scanResult.card_count ? `${scanResult.card_count} card(s) detected — ` : '';
                 preview.innerHTML = `
                     <div class="text-center">
                         <div class="spinner-border text-light mb-2" style="width:2rem;height:2rem;"></div>
-                        <div class="text-light small">Uploading to cloud...</div>
+                        <div class="text-light small">${cardLabel}Uploading to cloud...</div>
                     </div>`;
             }
-            const binary = atob(scanResult.image_data);
+            const binary = atob(imageB64);
             const bytes = new Uint8Array(binary.length);
             for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
             const blob = new Blob([bytes], { type: 'image/png' });

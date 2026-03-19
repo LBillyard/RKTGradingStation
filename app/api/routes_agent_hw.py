@@ -19,6 +19,157 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _detect_and_crop_cards(pil_img) -> list[dict]:
+    """Detect cards in a full-bed scan and return cropped card images as base64.
+
+    Uses OpenCV contour detection to find card-shaped rectangles, then
+    perspective-corrects and crops each one with a small border.
+    Returns a list of dicts with 'image_data' (base64 PNG) per card.
+    """
+    import base64
+    import io
+
+    import cv2
+    import numpy as np
+    from PIL import Image as PILImage
+
+    # Convert PIL to OpenCV
+    img_array = np.array(pil_img)
+    if len(img_array.shape) == 3 and img_array.shape[2] == 3:
+        bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+    else:
+        bgr = img_array
+
+    h, w = bgr.shape[:2]
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+    cards = []
+
+    # Try multiple edge detection methods
+    for method in ['canny', 'adaptive', 'otsu']:
+        if method == 'canny':
+            edges = cv2.Canny(blurred, 30, 150)
+            edges = cv2.dilate(edges, None, iterations=2)
+        elif method == 'adaptive':
+            thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
+            edges = cv2.dilate(thresh, None, iterations=2)
+        else:
+            _, edges = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+            edges = cv2.dilate(edges, None, iterations=2)
+
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        # Sort by area descending
+        contours = sorted(contours, key=cv2.contourArea, reverse=True)
+
+        for cnt in contours[:10]:
+            area = cv2.contourArea(cnt)
+            # Card must be at least 2% of image (very small on scanner bed)
+            if area < h * w * 0.02:
+                continue
+
+            peri = cv2.arcLength(cnt, True)
+            approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+
+            if len(approx) == 4:
+                # Check aspect ratio (card is ~0.714 = 63/88mm)
+                rect = cv2.minAreaRect(cnt)
+                rw, rh = rect[1]
+                if rw == 0 or rh == 0:
+                    continue
+                aspect = min(rw, rh) / max(rw, rh)
+                if aspect < 0.45 or aspect > 0.95:
+                    continue
+
+                # Check not duplicate (IoU with existing)
+                is_dup = False
+                for existing in cards:
+                    iou = _compute_iou(approx.reshape(4, 2), existing['corners'])
+                    if iou > 0.5:
+                        is_dup = True
+                        break
+                if is_dup:
+                    continue
+
+                corners = approx.reshape(4, 2)
+                cards.append({'corners': corners, 'area': area})
+
+        if cards:
+            break  # Found cards with this method
+
+    if not cards:
+        return []
+
+    # Sort cards by position (top-to-bottom, left-to-right)
+    cards.sort(key=lambda c: (c['corners'][:, 1].mean(), c['corners'][:, 0].mean()))
+
+    results = []
+    for card_info in cards[:8]:  # Max 8 cards
+        corners = card_info['corners'].astype(np.float32)
+
+        # Order corners: TL, TR, BR, BL
+        ordered = _order_corners(corners)
+
+        # Expand slightly (5%) to keep card border visible
+        center = ordered.mean(axis=0)
+        expanded = center + (ordered - center) * 1.05
+
+        # Destination size: standard card at scan DPI
+        dst_w, dst_h = 750, 1050
+        dst = np.array([[0, 0], [dst_w, 0], [dst_w, dst_h], [0, dst_h]], dtype=np.float32)
+
+        M = cv2.getPerspectiveTransform(expanded.astype(np.float32), dst)
+        warped = cv2.warpPerspective(bgr, M, (dst_w, dst_h), flags=cv2.INTER_LANCZOS4)
+
+        # Convert back to PIL and encode
+        rgb = cv2.cvtColor(warped, cv2.COLOR_BGR2RGB)
+        card_pil = PILImage.fromarray(rgb)
+
+        buf = io.BytesIO()
+        card_pil.save(buf, format="PNG", optimize=True)
+        b64 = base64.b64encode(buf.getvalue()).decode()
+
+        results.append({
+            "image_data": b64,
+            "width": dst_w,
+            "height": dst_h,
+        })
+        logger.info(f"Cropped card {len(results)}: {len(buf.getvalue())} bytes")
+
+    return results
+
+
+def _order_corners(pts):
+    """Order corners: top-left, top-right, bottom-right, bottom-left."""
+    import numpy as np
+    rect = np.zeros((4, 2), dtype=np.float32)
+    s = pts.sum(axis=1)
+    d = np.diff(pts, axis=1).flatten()
+    rect[0] = pts[np.argmin(s)]   # TL: smallest sum
+    rect[2] = pts[np.argmax(s)]   # BR: largest sum
+    rect[1] = pts[np.argmin(d)]   # TR: smallest diff
+    rect[3] = pts[np.argmax(d)]   # BL: largest diff
+    return rect
+
+
+def _compute_iou(corners1, corners2):
+    """Compute IoU between two sets of 4 corners using bounding rects."""
+    import numpy as np
+    r1 = (corners1[:, 0].min(), corners1[:, 1].min(), corners1[:, 0].max(), corners1[:, 1].max())
+    r2 = (corners2[:, 0].min(), corners2[:, 1].min(), corners2[:, 0].max(), corners2[:, 1].max())
+    x1 = max(r1[0], r2[0])
+    y1 = max(r1[1], r2[1])
+    x2 = min(r1[2], r2[2])
+    y2 = min(r1[3], r2[3])
+    if x2 <= x1 or y2 <= y1:
+        return 0.0
+    inter = (x2 - x1) * (y2 - y1)
+    a1 = (r1[2] - r1[0]) * (r1[3] - r1[1])
+    a2 = (r2[2] - r2[0]) * (r2[3] - r2[1])
+    return inter / (a1 + a2 - inter)
+
+
 # ---- Request models ----
 
 class PrintRequest(BaseModel):
@@ -159,34 +310,45 @@ async def acquire_scan(req: ScanRequest):
 
         result = await asyncio.to_thread(scanner.scan, req.dpi)
 
-        # Handle different result types
-        image_data = None
-        image_path = None
-
+        # Get PIL image from result
+        pil_img = None
         if hasattr(result, 'image') and result.image is not None:
-            # ScanResult with PIL Image — save to temp and encode
-            import io
-            buf = io.BytesIO()
-            result.image.save(buf, format="PNG")
-            image_data = base64.b64encode(buf.getvalue()).decode()
+            pil_img = result.image
         elif hasattr(result, 'image_path') and result.image_path:
-            image_path = result.image_path
+            from PIL import Image as PILImage
+            pil_img = PILImage.open(result.image_path)
         elif isinstance(result, str):
-            image_path = result
+            from PIL import Image as PILImage
+            pil_img = PILImage.open(result)
         elif isinstance(result, dict) and 'image_path' in result:
-            image_path = result['image_path']
+            from PIL import Image as PILImage
+            pil_img = PILImage.open(result['image_path'])
         else:
             raise RuntimeError(f"Unexpected scan result type: {type(result)}")
 
-        # Read from file if we got a path
-        if image_data is None and image_path:
-            with open(image_path, "rb") as f:
-                image_data = base64.b64encode(f.read()).decode()
+        # Detect and crop cards from the full-bed scan
+        cards_data = await asyncio.to_thread(_detect_and_crop_cards, pil_img)
 
-        return {
-            "status": "success",
-            "image_data": image_data,
-            "image_path": image_path or "memory",
+        if cards_data:
+            # Return cropped card images (much smaller than full bed)
+            logger.info(f"Detected {len(cards_data)} card(s), uploading cropped images")
+            return {
+                "status": "success",
+                "cards": cards_data,
+                "card_count": len(cards_data),
+                "format": "png",
+            }
+        else:
+            # Fallback: no cards detected, send full image
+            import io
+            buf = io.BytesIO()
+            pil_img.save(buf, format="PNG")
+            image_data = base64.b64encode(buf.getvalue()).decode()
+            logger.warning("No cards detected in scan, sending full bed image")
+            return {
+                "status": "success",
+                "image_data": image_data,
+                "image_path": "memory",
             "format": "png",
         }
     except Exception as e:
