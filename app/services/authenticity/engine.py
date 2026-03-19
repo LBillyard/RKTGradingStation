@@ -406,16 +406,30 @@ class AuthenticityEngine:
                 db.add(decision)
 
                 # Create individual check records
+                def _native(v):
+                    """Convert numpy types to native Python for DB."""
+                    if v is None:
+                        return v
+                    try:
+                        import numpy as _np
+                        if isinstance(v, _np.floating):
+                            return float(v)
+                        if isinstance(v, _np.integer):
+                            return int(v)
+                    except ImportError:
+                        pass
+                    return v
+
                 for cr in result.check_records:
                     check = AuthenticityCheck(
                         id=str(uuid.uuid4()),
                         card_record_id=result.card_id,
                         check_type=cr.check_type,
-                        passed=cr.passed,
-                        confidence=cr.confidence,
+                        passed=bool(cr.passed),
+                        confidence=_native(cr.confidence),
                         details=cr.details,
                         error_message=cr.error_message,
-                        processing_time_ms=cr.processing_time_ms,
+                        processing_time_ms=_native(cr.processing_time_ms),
                     )
                     db.add(check)
 

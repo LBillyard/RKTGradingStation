@@ -368,7 +368,7 @@ async def scan_to_slab_pipeline(
     grade_data = None
     try:
         # Gate: skip grading if card identification failed
-        if card_record.card_name in ("Unknown", "Unknown Card", "") or (card_record.identification_confidence or 0) < 0.3:
+        if card_record.card_name in ("Unknown", "Unknown Card", ""):
             card_record.status = "identification_failed"
             db.commit()
             raise RuntimeError("Card identification failed — manual review required")
@@ -668,7 +668,7 @@ async def batch_scan(session_id: str, dpi: int = 600, db: Session = Depends(get_
         # Grading
         try:
             # Gate: skip grading if card identification failed
-            if card_record.card_name in ("Unknown", "Unknown Card", "") or (card_record.identification_confidence or 0) < 0.3:
+            if card_record.card_name in ("Unknown", "Unknown Card", ""):
                 card_record.status = "identification_failed"
                 db.commit()
                 raise RuntimeError("Card identification failed — manual review required")
@@ -1088,8 +1088,8 @@ async def process_scan_session(session_id: str, force_multi: bool = False, db: S
 
     # Step 4: Grading
     try:
-        # Gate: skip grading if card identification failed
-        if card_record.card_name in ("Unknown", "Unknown Card", "") or (card_record.identification_confidence or 0) < 0.3:
+        # Gate: skip grading only if card name is truly unknown
+        if card_record.card_name in ("Unknown", "Unknown Card", ""):
             card_record.status = "identification_failed"
             db.commit()
             raise RuntimeError("Card identification failed — manual review required")
@@ -1380,7 +1380,7 @@ async def process_multi_scan(session_id: str, db: Session = Depends(get_db)):
         # Grading
         try:
             # Gate: skip grading if card identification failed
-            if card_record.card_name in ("Unknown", "Unknown Card", "") or (card_record.identification_confidence or 0) < 0.3:
+            if card_record.card_name in ("Unknown", "Unknown Card", ""):
                 card_record.status = "identification_failed"
                 db.commit()
                 raise RuntimeError("Card identification failed — manual review required")
