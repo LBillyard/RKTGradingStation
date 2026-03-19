@@ -72,6 +72,7 @@ def build():
         "--icon", "rkt_agent.ico",
         # Bundle the icon file
         "--add-data", "rkt_agent.ico;.",
+        "--add-data", "installer/drivers/canon-lide400-driver.exe;drivers",
         # Include app package as data
         "--add-data", "app;app",
         "--add-data", "agent_version.py;.",

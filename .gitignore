@@ -50,7 +50,11 @@ Thumbs.db
 # Build artifacts
 dist/
 build/
+build_venv/
 *.spec
+
+# Bundled drivers (too large for git — distribute separately)
+installer/drivers/*.exe
 
 # Agent env
 agent.env

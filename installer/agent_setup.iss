@@ -8,7 +8,7 @@
 
 [Setup]
 AppName=RKT Station Agent
-AppVersion=1.0.0
+AppVersion=1.2.1
 AppPublisher=RKT Grading
 AppPublisherURL=https://rktgradingstation.co.uk
 DefaultDirName={autopf}\RKT Station Agent
@@ -23,11 +23,15 @@ SetupIconFile=compiler:SetupClassicIcon.ico
 UninstallDisplayIcon={app}\RKTStationAgent.exe
 
 [Files]
-Source: "..\dist\RKTStationAgent\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
+Source: "..\dist\RKTStationAgent.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\agent.env.example"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\rkt_agent.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "drivers\canon-lide400-driver.exe"; DestDir: "{app}\drivers"; Flags: ignoreversion
 
 [Tasks]
 Name: "startupentry"; Description: "Start automatically when Windows starts"; GroupDescription: "Startup:"; Flags: checkedonce
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+Name: "installdriver"; Description: "Install Canon LiDE 400 scanner driver"; GroupDescription: "Scanner:"; Flags: checkedonce
 
 [Icons]
 Name: "{group}\RKT Station Agent"; Filename: "{app}\RKTStationAgent.exe"; Parameters: "--tray"
@@ -36,6 +40,9 @@ Name: "{autodesktop}\RKT Station Agent"; Filename: "{app}\RKTStationAgent.exe"; 
 Name: "{userstartup}\RKT Station Agent"; Filename: "{app}\RKTStationAgent.exe"; Parameters: "--tray"; Tasks: startupentry
 
 [Run]
+; Install Canon driver if selected
+Filename: "{app}\drivers\canon-lide400-driver.exe"; Description: "Installing Canon LiDE 400 driver..."; StatusMsg: "Installing Canon scanner driver..."; Tasks: installdriver; Flags: waituntilterminated
+; Launch the agent
 Filename: "{app}\RKTStationAgent.exe"; Parameters: "--tray"; Description: "Launch RKT Station Agent"; Flags: nowait postinstall skipifsilent
 
 [Code]

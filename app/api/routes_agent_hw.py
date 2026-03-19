@@ -143,6 +143,20 @@ async def acquire_scan(req: ScanRequest):
 
     scanner = _get_scanner()
     try:
+        # Auto-connect to first available device if not already connected
+        if hasattr(scanner, 'is_connected') and not scanner.is_connected():
+            if hasattr(scanner, 'list_devices'):
+                devices = await asyncio.to_thread(scanner.list_devices)
+                if devices:
+                    device_id = devices[0].device_id if hasattr(devices[0], 'device_id') else devices[0].get('device_id', '')
+                    if device_id:
+                        await asyncio.to_thread(scanner.connect, device_id)
+                        logger.info(f"Auto-connected to scanner: {device_id}")
+                    else:
+                        raise RuntimeError("Scanner found but no device_id available")
+                else:
+                    raise RuntimeError("No scanner devices found — is the scanner connected?")
+
         result = await asyncio.to_thread(scanner.scan, req.dpi)
 
         if hasattr(result, 'image_path') and result.image_path:

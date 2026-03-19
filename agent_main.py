@@ -51,6 +51,9 @@ def main() -> None:
     logger.info(f"Station ID: {settings.station_id or 'not set'}")
     logger.info("=" * 50)
 
+    # Install Canon scanner driver if needed
+    _install_scanner_driver_if_needed(logger)
+
     # Ensure auto-start on Windows boot
     _ensure_startup_entry()
 
@@ -111,6 +114,63 @@ def _run_server(settings) -> None:
         log_level="info",
         access_log=False,
     )
+
+
+def _install_scanner_driver_if_needed(logger) -> None:
+    """Check if Canon LiDE 400 ScanGear driver is installed, install if not."""
+    try:
+        # Check if the Canon ScanGear driver is already installed
+        import subprocess
+        result = subprocess.run(
+            ["powershell", "-Command",
+             "Get-WmiObject Win32_PnPSignedDriver | Where-Object { $_.DeviceName -like '*CanoScan*' -or $_.DeviceName -like '*LiDE 400*' } | Select-Object -First 1 DeviceName, DriverProviderName"],
+            capture_output=True, text=True, timeout=10,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+
+        if "Canon" in result.stdout:
+            logger.debug("Canon ScanGear driver already installed")
+            return
+
+        # Check if we have the bundled driver
+        driver_path = None
+        if getattr(sys, 'frozen', False):
+            # PyInstaller: check in the extracted temp dir
+            bundle_dir = Path(sys._MEIPASS) if hasattr(sys, '_MEIPASS') else Path(sys.executable).parent
+            candidate = bundle_dir / "drivers" / "canon-lide400-driver.exe"
+            if candidate.exists():
+                driver_path = str(candidate)
+        else:
+            # Dev mode: check installer/drivers
+            candidate = Path(__file__).parent / "installer" / "drivers" / "canon-lide400-driver.exe"
+            if candidate.exists():
+                driver_path = str(candidate)
+
+        if not driver_path:
+            logger.debug("Canon driver installer not bundled — skipping auto-install")
+            return
+
+        logger.info("Canon ScanGear driver not found — installing from bundled installer...")
+        _show_notification("Installing Scanner Driver", "Installing Canon LiDE 400 driver. This may take a minute...")
+
+        # Run the Canon installer
+        # Canon's installer supports /s for silent mode
+        proc = subprocess.run(
+            [driver_path],
+            timeout=300,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+
+        if proc.returncode == 0:
+            logger.info("Canon ScanGear driver installed successfully")
+            _show_notification("Driver Installed", "Canon LiDE 400 driver installed. Scanner is ready to use.")
+        else:
+            logger.warning(f"Canon driver installer returned code {proc.returncode}")
+
+    except subprocess.TimeoutExpired:
+        logger.warning("Canon driver installation timed out — may need manual install")
+    except Exception as e:
+        logger.debug(f"Scanner driver check/install skipped: {e}")
 
 
 def _ensure_startup_entry() -> None:

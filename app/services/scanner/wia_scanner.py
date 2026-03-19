@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 # WIA Constants
 WIA_DEVICE_TYPE_SCANNER = 1
 WIA_IMG_FORMAT_BMP = "{B96B3CAB-0728-11D3-9D7B-0000F81EF32E}"
+WIA_IMG_FORMAT_PNG = "{B96B3CAF-0728-11D3-9D7B-0000F81EF32E}"
+WIA_IMG_FORMAT_JPEG = "{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}"
+WIA_IMG_FORMAT_TIFF = "{B96B3CB1-0728-11D3-9D7B-0000F81EF32E}"
 
 
 class WIAScanner(BaseScanner):
@@ -108,11 +111,43 @@ class WIAScanner(BaseScanner):
 
             logger.info(f"Scanning at {dpi}dpi, extent: {item.Properties('Horizontal Extent').Value}x{item.Properties('Vertical Extent').Value}")
 
-            # Transfer image as BMP
-            image_file = item.Transfer(WIA_IMG_FORMAT_BMP)
+            # Transfer image — try default format first, then specific formats
+            image_file = None
+            temp_ext = ".bmp"
+
+            # Try 1: Default format (no format GUID — let scanner decide)
+            try:
+                result_file = item.Transfer()
+                if result_file is not None:
+                    image_file = result_file
+                    temp_ext = ".bmp"
+                    logger.info("Transfer successful with default format")
+            except Exception as def_err:
+                logger.debug(f"Default format failed: {def_err}")
+
+            # Try 2: Specific formats
+            if image_file is None:
+                for fmt, ext in [
+                    (WIA_IMG_FORMAT_BMP, ".bmp"),
+                    (WIA_IMG_FORMAT_PNG, ".png"),
+                    (WIA_IMG_FORMAT_JPEG, ".jpg"),
+                    (WIA_IMG_FORMAT_TIFF, ".tiff"),
+                ]:
+                    try:
+                        result_file = item.Transfer(fmt)
+                        if result_file is not None:
+                            image_file = result_file
+                            temp_ext = ext
+                            logger.info(f"Transfer successful with format {ext}")
+                            break
+                    except Exception as fmt_err:
+                        logger.debug(f"Format {ext} not supported: {fmt_err}")
+
+            if image_file is None:
+                raise RuntimeError("Scanner did not return image data — no supported transfer format found")
 
             # Save to temp file and load with PIL
-            temp_path = os.path.join(tempfile.gettempdir(), f"rkt_scan_{int(time.time())}.bmp")
+            temp_path = os.path.join(tempfile.gettempdir(), f"rkt_scan_{int(time.time())}{temp_ext}")
             image_file.SaveFile(temp_path)
             with Image.open(temp_path) as _raw:
                 img = _raw.convert("RGB")
