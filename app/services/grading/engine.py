@@ -421,87 +421,67 @@ class GradingEngine:
             "grading_confidence": grading_confidence,
         }
 
-        # ── AI Vision Grading (hybrid mode) ──────────────────────────────
-        # When OpenRouter is enabled, run AI vision grading and use it as
-        # the primary grade, keeping OpenCV scores for comparison.
-        if settings.openrouter.enabled:
-            try:
-                from app.services.ai.vision_grader import grade_card_with_vision
-                card_info = None
-                # Try to get card info from the DB record if we have a card_record_id
-                ai_result = await grade_card_with_vision(
-                    image_path=card_image_path,
-                    card_info=card_info,
-                    back_image_path=back_image_path,
-                )
-                if ai_result:
-                    # Store OpenCV scores for comparison
-                    result["opencv_scores"] = {
-                        "centering": result["centering"]["score"],
-                        "corners": result["corners"]["score"],
-                        "edges": result["edges"]["score"],
-                        "surface": result["surface"]["score"],
-                        "final_grade": result["final_grade"],
-                        "raw_score": result["raw_score"],
+        # ── AI Vision Grading (primary method) ────────────────────────────
+        # AI vision is the primary grading method. OpenCV centering data is
+        # kept for the centering overlay but all scores come from AI.
+        # Falls back to OpenCV only if AI is unavailable.
+        try:
+            from app.services.ai.vision_grader import grade_card_with_vision
+            card_info = None
+            ai_result = await grade_card_with_vision(
+                image_path=card_image_path,
+                card_info=card_info,
+                back_image_path=back_image_path,
+            )
+            if ai_result:
+                # Keep OpenCV centering measurements (border pixels) for overlay
+                # but replace all scores with AI vision scores
+                result["corners"]["score"] = ai_result.corners_score
+                result["edges"]["score"] = ai_result.edges_score
+                result["surface"]["score"] = ai_result.surface_score
+                # Use AI centering score but keep OpenCV border measurements
+                result["centering"]["score"] = ai_result.centering_score
+                result["sub_scores"] = {
+                    "centering": ai_result.centering_score,
+                    "corners": ai_result.corners_score,
+                    "edges": ai_result.edges_score,
+                    "surface": ai_result.surface_score,
+                }
+                result["raw_score"] = ai_result.raw_score
+                result["final_grade"] = ai_result.final_grade
+                result["grading_confidence"] = ai_result.confidence * 100
+                result["grade_explanation"] = ai_result.grade_explanation
+                result["grading_method"] = "ai_vision"
+                result["ai_model"] = ai_result.model_used
+
+                # Replace defects with AI-detected defects
+                result["defects"] = [
+                    {
+                        "category": d.category,
+                        "defect_type": d.defect_type,
+                        "severity": d.severity,
+                        "location": d.location,
+                        "score_impact": d.score_impact,
+                        "hard_cap": None,
+                        "bbox": {"x": 0, "y": 0, "w": 0, "h": 0},
+                        "confidence": d.confidence,
+                        "is_noise": False,
+                        "details": {"description": d.description},
+                        "zone": "general",
+                        "zone_weight": 1.0,
+                        "side": "front",
                     }
-                    # Override with AI scores
-                    result["centering"]["score"] = ai_result.centering_score
-                    result["corners"]["score"] = ai_result.corners_score
-                    result["edges"]["score"] = ai_result.edges_score
-                    result["surface"]["score"] = ai_result.surface_score
-                    result["sub_scores"] = {
-                        "centering": ai_result.centering_score,
-                        "corners": ai_result.corners_score,
-                        "edges": ai_result.edges_score,
-                        "surface": ai_result.surface_score,
-                    }
-                    result["raw_score"] = ai_result.raw_score
-                    result["final_grade"] = ai_result.final_grade
-                    result["grading_confidence"] = ai_result.confidence * 100
-                    result["grade_explanation"] = ai_result.grade_explanation
-                    result["grading_method"] = "ai_vision"
-                    result["ai_model"] = ai_result.model_used
+                    for d in ai_result.defects
+                ]
+                result["defect_count"] = len(ai_result.defects)
 
-                    # Replace defects with AI-detected defects
-                    result["defects"] = [
-                        {
-                            "category": d.category,
-                            "defect_type": d.defect_type,
-                            "severity": d.severity,
-                            "location": d.location,
-                            "score_impact": d.score_impact,
-                            "hard_cap": None,
-                            "bbox": {"x": 0, "y": 0, "w": 0, "h": 0},
-                            "confidence": d.confidence,
-                            "is_noise": False,
-                            "details": {"description": d.description},
-                            "zone": "general",
-                            "zone_weight": 1.0,
-                            "side": "front",
-                        }
-                        for d in ai_result.defects
-                    ]
-                    result["defect_count"] = len(ai_result.defects)
-
-                    # Check for large disagreement with OpenCV
-                    opencv_final = result["opencv_scores"]["final_grade"]
-                    ai_final = ai_result.final_grade
-                    if abs(opencv_final - ai_final) > 1.5:
-                        logger.warning(
-                            "AI/OpenCV disagreement: AI=%.1f, OpenCV=%.1f (delta=%.1f)",
-                            ai_final, opencv_final, abs(opencv_final - ai_final),
-                        )
-                        result["ai_opencv_disagreement"] = True
-
-                    logger.info("Using AI vision grade: %.1f (OpenCV was: %.1f)", ai_final, opencv_final)
-                else:
-                    result["grading_method"] = "opencv"
-                    logger.info("AI vision unavailable, using OpenCV grade: %.1f", result["final_grade"])
-            except Exception as e:
-                result["grading_method"] = "opencv"
-                logger.warning("AI vision grading failed, using OpenCV: %s", e)
-        else:
-            result["grading_method"] = "opencv"
+                logger.info("AI vision grade: %.1f (%d defects)", ai_result.final_grade, len(ai_result.defects))
+            else:
+                result["grading_method"] = "opencv_fallback"
+                logger.warning("AI vision unavailable, falling back to OpenCV: %.1f", result["final_grade"])
+        except Exception as e:
+            result["grading_method"] = "opencv_fallback"
+            logger.warning("AI vision grading failed, falling back to OpenCV: %s", e)
 
         # Publish grade event
         event_bus.publish(Events.GRADE_CALCULATED, {
