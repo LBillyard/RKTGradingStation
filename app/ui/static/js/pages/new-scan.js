@@ -109,8 +109,8 @@ function renderScanPhase(container) {
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">Scan Preset</label>
                                 <select class="form-select" id="scan-preset">
-                                    <option value="detailed" selected>Detailed (600 DPI)</option>
-                                    <option value="fast_production">Fast Production (300 DPI)</option>
+                                    <option value="detailed">Detailed (600 DPI)</option>
+                                    <option value="fast_production" selected>Fast Production (300 DPI)</option>
                                     <option value="authenticity">Authenticity (1200 DPI)</option>
                                 </select>
                             </div>
@@ -236,7 +236,7 @@ async function checkScanner() {
 
 async function createSession() {
     if (state.sessionId) return;
-    const preset = document.getElementById('scan-preset')?.value || 'detailed';
+    const preset = document.getElementById('scan-preset')?.value || 'fast_production';
     const operator = document.getElementById('scan-operator')?.value || 'default';
     const res = await api.post(`/scan/start?preset=${preset}&operator=${encodeURIComponent(operator)}`);
     state.sessionId = res.session_id;
@@ -278,7 +278,7 @@ async function handleScan(side, container) {
                 </div>`;
         }
         await createSession();
-        const preset = document.getElementById('scan-preset')?.value || 'detailed';
+        const preset = document.getElementById('scan-preset')?.value || 'fast_production';
         const dpiMap = { fast_production: 300, detailed: 600, authenticity: 1200 };
         const dpi = dpiMap[preset] || 600;
 
