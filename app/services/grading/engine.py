@@ -23,6 +23,54 @@ from app.services.grading.profiles import get_profile, SensitivityProfile
 logger = logging.getLogger(__name__)
 
 
+def _location_to_bbox(location: str, category: str, img_w: int, img_h: int) -> dict:
+    """Map an AI text location description to approximate bounding box coordinates.
+
+    Returns {x, y, w, h} in image pixel coordinates.
+    """
+    loc = (location or "").lower().replace("-", "_").replace(" ", "_")
+    cat = (category or "").lower()
+
+    # Corner size: 15% of image dimensions
+    cw, ch = int(img_w * 0.15), int(img_h * 0.12)
+    # Edge strip: 8% width
+    ew, eh = int(img_w * 0.08), int(img_h * 0.06)
+
+    # Map locations to approximate regions
+    location_map = {
+        # Corners
+        "top_left": {"x": 0, "y": 0, "w": cw, "h": ch},
+        "top_right": {"x": img_w - cw, "y": 0, "w": cw, "h": ch},
+        "bottom_left": {"x": 0, "y": img_h - ch, "w": cw, "h": ch},
+        "bottom_right": {"x": img_w - cw, "y": img_h - ch, "w": cw, "h": ch},
+        # Edges
+        "top_edge": {"x": cw, "y": 0, "w": img_w - 2 * cw, "h": eh},
+        "bottom_edge": {"x": cw, "y": img_h - eh, "w": img_w - 2 * cw, "h": eh},
+        "left_edge": {"x": 0, "y": ch, "w": ew, "h": img_h - 2 * ch},
+        "right_edge": {"x": img_w - ew, "y": ch, "w": ew, "h": img_h - 2 * ch},
+        # Surface areas
+        "center": {"x": int(img_w * 0.25), "y": int(img_h * 0.25), "w": int(img_w * 0.5), "h": int(img_h * 0.5)},
+        "top": {"x": int(img_w * 0.15), "y": 0, "w": int(img_w * 0.7), "h": int(img_h * 0.3)},
+        "bottom": {"x": int(img_w * 0.15), "y": int(img_h * 0.7), "w": int(img_w * 0.7), "h": int(img_h * 0.3)},
+    }
+
+    # Try exact match first
+    for key, bbox in location_map.items():
+        if key in loc:
+            return bbox
+
+    # Fallback by category
+    if cat == "corners":
+        return location_map.get("bottom_left", {"x": 0, "y": img_h - ch, "w": cw, "h": ch})
+    if cat == "edges":
+        return location_map.get("bottom_edge", {"x": cw, "y": img_h - eh, "w": img_w - 2 * cw, "h": eh})
+    if cat == "surface":
+        return location_map.get("center", {"x": int(img_w * 0.25), "y": int(img_h * 0.25), "w": int(img_w * 0.5), "h": int(img_h * 0.5)})
+
+    # Default: center of card
+    return {"x": int(img_w * 0.2), "y": int(img_h * 0.2), "w": int(img_w * 0.6), "h": int(img_h * 0.6)}
+
+
 class GradingEngine:
     """Orchestrate the full card grading pipeline.
 
@@ -458,6 +506,9 @@ class GradingEngine:
                 result["defect_cap"] = None
 
                 # Replace defects with AI-detected defects
+                # Map text locations to approximate bounding boxes on the card image
+                img_w = image.shape[1] if image is not None else 750
+                img_h = image.shape[0] if image is not None else 1050
                 result["defects"] = [
                     {
                         "category": d.category,
@@ -466,11 +517,11 @@ class GradingEngine:
                         "location": d.location,
                         "score_impact": d.score_impact,
                         "hard_cap": None,
-                        "bbox": {"x": 0, "y": 0, "w": 0, "h": 0},
+                        "bbox": _location_to_bbox(d.location, d.category, img_w, img_h),
                         "confidence": d.confidence,
                         "is_noise": False,
                         "details": {"description": d.description},
-                        "zone": "general",
+                        "zone": d.location or "general",
                         "zone_weight": 1.0,
                         "side": "front",
                     }
