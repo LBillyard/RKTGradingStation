@@ -900,7 +900,22 @@ function renderCenteringDiagram(data) {
 
 function _addCenteringOverlayToViewer(bLeft, bRight, bTop, bBottom, lrLeft, tbTop) {
     // Add centering guide lines on the card image via the viewer
-    if (!viewer || !bLeft) return;
+    if (!viewer) return;
+
+    // If no pixel data, estimate from ratios and image size
+    if (!bLeft && viewer.image) {
+        const imgW = viewer.image.width;
+        const imgH = viewer.image.height;
+        // Estimate borders from centering ratios (assume ~8% border on each side)
+        const borderPct = 0.08;
+        const totalBorderH = imgW * borderPct * 2;
+        const totalBorderV = imgH * borderPct * 2;
+        bLeft = Math.round(totalBorderH * (lrLeft / 100));
+        bRight = Math.round(totalBorderH * ((100 - lrLeft) / 100));
+        bTop = Math.round(totalBorderV * (tbTop / 100));
+        bBottom = Math.round(totalBorderV * ((100 - tbTop) / 100));
+    }
+    if (!bLeft) return;
 
     // Store centering data for toggle
     viewer._centeringData = { bLeft, bRight, bTop, bBottom, lrLeft, tbTop };
