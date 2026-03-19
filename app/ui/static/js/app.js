@@ -221,6 +221,31 @@ async function updateScannerStatus() {
     const dot = document.getElementById('navbar-scanner-dot');
     const text = document.getElementById('navbar-scanner-text');
     if (!dot || !text) return;
+
+    // In cloud mode, get scanner status from the local agent
+    if (isCloudMode && agent.connected) {
+        try {
+            const status = await agent.request('GET', '/status');
+            const scanner = status?.hardware?.scanner;
+            const devices = scanner?.devices || [];
+            const hasReal = devices.some(d => d.is_connected);
+
+            if (scanner?.mock_mode) {
+                dot.className = 'status-indicator status-warning';
+                text.textContent = 'Scanner: Mock Mode';
+            } else if (hasReal) {
+                const name = devices[0]?.name || 'Scanner';
+                dot.className = 'status-indicator status-online';
+                text.textContent = name;
+            } else {
+                dot.className = 'status-indicator status-offline';
+                text.textContent = 'No Scanner';
+            }
+            return;
+        } catch { /* fall through to cloud check */ }
+    }
+
+    // Desktop mode or agent not connected: check cloud/local server
     try {
         const res = await api.get('/scan/devices/list');
         const hasReal = res.real_devices && res.real_devices.length > 0;
