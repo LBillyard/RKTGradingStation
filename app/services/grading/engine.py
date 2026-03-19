@@ -877,7 +877,7 @@ class GradingEngine:
             centering_conf = 0.5
 
         confidence = (avg_conf * 0.40 + noise_ratio * 0.20 + ref_score * 0.20 + centering_conf * 0.20)
-        return round(confidence * 100, 1)
+        return float(round(confidence * 100, 1))
 
     def _filter_with_reference(
         self,
@@ -956,6 +956,21 @@ class GradingEngine:
 
         return defects
 
+    @staticmethod
+    def _to_native(val):
+        """Convert numpy types to native Python types for DB storage."""
+        if val is None:
+            return None
+        try:
+            import numpy as _np
+            if isinstance(val, (_np.integer,)):
+                return int(val)
+            if isinstance(val, (_np.floating,)):
+                return float(val)
+        except ImportError:
+            pass
+        return val
+
     def _save_to_db(self, card_record_id: str, result: dict) -> None:
         """Persist grading results to the database.
 
@@ -963,6 +978,8 @@ class GradingEngine:
         """
         from app.db.database import get_session
         from app.models.grading import GradeDecision, DefectFinding, GradeHistory
+
+        _n = self._to_native  # shorthand
 
         session = get_session()
         try:
@@ -988,20 +1005,20 @@ class GradingEngine:
                 session.add(history)
 
                 # Update existing decision
-                existing.centering_score = result["centering"]["score"]
-                existing.corners_score = result["corners"]["score"]
-                existing.edges_score = result["edges"]["score"]
-                existing.surface_score = result["surface"]["score"]
-                existing.raw_grade = result["raw_score"]
-                existing.final_grade = result["final_grade"]
-                existing.auto_grade = result["final_grade"]
+                existing.centering_score = _n(result["centering"]["score"])
+                existing.corners_score = _n(result["corners"]["score"])
+                existing.edges_score = _n(result["edges"]["score"])
+                existing.surface_score = _n(result["surface"]["score"])
+                existing.raw_grade = _n(result["raw_score"])
+                existing.final_grade = _n(result["final_grade"])
+                existing.auto_grade = _n(result["final_grade"])
                 existing.centering_ratio_lr = result["centering"]["lr_ratio"]
                 existing.centering_ratio_tb = result["centering"]["tb_ratio"]
                 existing.grade_caps_json = result["caps_applied"] or None
                 existing.sensitivity_profile = result["sensitivity_profile"]
                 existing.status = "graded"
-                existing.defect_count = result["defect_count"]
-                existing.grading_confidence = result.get("grading_confidence")
+                existing.defect_count = _n(result["defect_count"])
+                existing.grading_confidence = _n(result.get("grading_confidence"))
 
                 # Remove old defect findings
                 session.query(DefectFinding).filter(
@@ -1011,20 +1028,20 @@ class GradingEngine:
                 # Create new decision
                 decision = GradeDecision(
                     card_record_id=card_record_id,
-                    centering_score=result["centering"]["score"],
-                    corners_score=result["corners"]["score"],
-                    edges_score=result["edges"]["score"],
-                    surface_score=result["surface"]["score"],
-                    raw_grade=result["raw_score"],
-                    final_grade=result["final_grade"],
-                    auto_grade=result["final_grade"],
+                    centering_score=_n(result["centering"]["score"]),
+                    corners_score=_n(result["corners"]["score"]),
+                    edges_score=_n(result["edges"]["score"]),
+                    surface_score=_n(result["surface"]["score"]),
+                    raw_grade=_n(result["raw_score"]),
+                    final_grade=_n(result["final_grade"]),
+                    auto_grade=_n(result["final_grade"]),
                     centering_ratio_lr=result["centering"]["lr_ratio"],
                     centering_ratio_tb=result["centering"]["tb_ratio"],
                     grade_caps_json=result["caps_applied"] or None,
                     sensitivity_profile=result["sensitivity_profile"],
                     status="graded",
-                    defect_count=result["defect_count"],
-                    grading_confidence=result.get("grading_confidence"),
+                    defect_count=_n(result["defect_count"]),
+                    grading_confidence=_n(result.get("grading_confidence")),
                 )
                 session.add(decision)
 
