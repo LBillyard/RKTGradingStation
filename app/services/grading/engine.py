@@ -453,6 +453,9 @@ class GradingEngine:
                 result["grade_explanation"] = ai_result.grade_explanation
                 result["grading_method"] = "ai_vision"
                 result["ai_model"] = ai_result.model_used
+                # Clear OpenCV caps — AI grade is self-contained
+                result["caps_applied"] = None
+                result["defect_cap"] = None
 
                 # Replace defects with AI-detected defects
                 result["defects"] = [
