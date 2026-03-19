@@ -295,7 +295,7 @@ async def scan_to_slab_pipeline(
             front_image_id=front_image.id,
             pokewallet_card_id=best.card.id if best else None,
             card_name=(best.card.name if best else None) or (id_parsed.card_name if id_parsed else None) or "Unknown",
-            set_name=best.card.set_name if best else "",
+            set_name=(best.card.set_name if best else None) or "",
             set_code=best.card.set_code if best else "",
             collector_number=(best.card.card_number if best else None) or (id_parsed.collector_number if id_parsed else ""),
             rarity=(best.card.rarity if best else None) or (id_parsed.rarity if id_parsed else ""),
@@ -367,6 +367,12 @@ async def scan_to_slab_pipeline(
     # ── Step 5: Grading ──────────────────────────────────────────────────
     grade_data = None
     try:
+        # Gate: skip grading if card identification failed
+        if card_record.card_name in ("Unknown", "Unknown Card", "") or (card_record.identification_confidence or 0) < 0.3:
+            card_record.status = "identification_failed"
+            db.commit()
+            raise RuntimeError("Card identification failed — manual review required")
+
         from app.services.grading.engine import GradingEngine
         engine = GradingEngine(profile_name=profile)
         img_path = front_image.processed_path or front_image.raw_path
@@ -595,7 +601,7 @@ async def batch_scan(session_id: str, dpi: int = 600, db: Session = Depends(get_
                 front_image_id=card_image_id,
                 pokewallet_card_id=best.card.id if best else None,
                 card_name=(best.card.name if best else None) or (id_parsed.card_name if id_parsed else None) or "Unknown",
-                set_name=best.card.set_name if best else "",
+                set_name=(best.card.set_name if best else None) or "",
                 set_code=best.card.set_code if best else "",
                 collector_number=(best.card.card_number if best else None) or (id_parsed.collector_number if id_parsed else ""),
                 rarity=(best.card.rarity if best else None) or (id_parsed.rarity if id_parsed else ""),
@@ -661,6 +667,12 @@ async def batch_scan(session_id: str, dpi: int = 600, db: Session = Depends(get_
 
         # Grading
         try:
+            # Gate: skip grading if card identification failed
+            if card_record.card_name in ("Unknown", "Unknown Card", "") or (card_record.identification_confidence or 0) < 0.3:
+                card_record.status = "identification_failed"
+                db.commit()
+                raise RuntimeError("Card identification failed — manual review required")
+
             from app.services.grading.engine import GradingEngine
             engine = GradingEngine()
             grade_result = await engine.grade_card_for_record(card_record.id, str(proc_path))
@@ -680,7 +692,7 @@ async def batch_scan(session_id: str, dpi: int = 600, db: Session = Depends(get_
         except Exception as e:
             card_result["steps"].append({"step": "grading", "status": "error", "error": str(e)})
 
-        card_record.status = "graded"
+        card_record.status = card_record.status if card_record.status == "identification_failed" else "graded"
         db.commit()
 
         card_result["card_id"] = card_record.id
@@ -1000,7 +1012,7 @@ async def process_scan_session(session_id: str, force_multi: bool = False, db: S
             front_image_id=front_image.id,
             pokewallet_card_id=best.card.id if best else None,
             card_name=(best.card.name if best else None) or (id_parsed.card_name if id_parsed else None) or "Unknown",
-            set_name=best.card.set_name if best else "",
+            set_name=(best.card.set_name if best else None) or "",
             set_code=best.card.set_code if best else "",
             collector_number=(best.card.card_number if best else None) or (id_parsed.collector_number if id_parsed else ""),
             rarity=(best.card.rarity if best else None) or (id_parsed.rarity if id_parsed else ""),
@@ -1076,6 +1088,12 @@ async def process_scan_session(session_id: str, force_multi: bool = False, db: S
 
     # Step 4: Grading
     try:
+        # Gate: skip grading if card identification failed
+        if card_record.card_name in ("Unknown", "Unknown Card", "") or (card_record.identification_confidence or 0) < 0.3:
+            card_record.status = "identification_failed"
+            db.commit()
+            raise RuntimeError("Card identification failed — manual review required")
+
         from app.services.grading.engine import GradingEngine
         engine = GradingEngine()
         img_path = front_image.processed_path or front_image.raw_path
@@ -1296,7 +1314,7 @@ async def process_multi_scan(session_id: str, db: Session = Depends(get_db)):
                 front_image_id=card_image_id,
                 pokewallet_card_id=best.card.id if best else None,
                 card_name=(best.card.name if best else None) or (id_parsed.card_name if id_parsed else None) or "Unknown",
-                set_name=best.card.set_name if best else "",
+                set_name=(best.card.set_name if best else None) or "",
                 set_code=best.card.set_code if best else "",
                 collector_number=(best.card.card_number if best else None) or (id_parsed.collector_number if id_parsed else ""),
                 rarity=(best.card.rarity if best else None) or (id_parsed.rarity if id_parsed else ""),
@@ -1361,6 +1379,12 @@ async def process_multi_scan(session_id: str, db: Session = Depends(get_db)):
 
         # Grading
         try:
+            # Gate: skip grading if card identification failed
+            if card_record.card_name in ("Unknown", "Unknown Card", "") or (card_record.identification_confidence or 0) < 0.3:
+                card_record.status = "identification_failed"
+                db.commit()
+                raise RuntimeError("Card identification failed — manual review required")
+
             from app.services.grading.engine import GradingEngine
             engine = GradingEngine()
             grade_result = await engine.grade_card_for_record(card_record.id, str(proc_path))
@@ -1379,7 +1403,7 @@ async def process_multi_scan(session_id: str, db: Session = Depends(get_db)):
         except Exception as e:
             card_result["steps"].append({"step": "grading", "status": "error", "error": str(e)})
 
-        card_record.status = "graded"
+        card_record.status = card_record.status if card_record.status == "identification_failed" else "graded"
         db.commit()
 
         card_result["card_id"] = card_record.id

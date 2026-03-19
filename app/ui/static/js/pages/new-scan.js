@@ -831,11 +831,12 @@ function renderMultiReport(container) {
             <div class="d-flex gap-2 mb-3 flex-wrap" id="multi-card-selector">
                 ${cards.map((c, i) => {
                     const gradeStep = c.steps.find(s => s.step === 'grading');
+                    const idFailed = c.card_name === 'Unknown' || c.card_name === 'Unknown Card' || !c.card_name || (gradeStep?.status === 'error' && gradeStep?.error?.includes('identification failed'));
                     const grade = gradeStep?.final_grade || 0;
                     return `
                         <button class="btn ${i === 0 ? 'btn-primary' : 'btn-outline-secondary'} multi-card-btn" data-index="${i}">
                             <div class="fw-semibold small">${c.card_name || 'Card ' + (i + 1)}</div>
-                            <div>${createGradeBadge(grade, 'sm')}</div>
+                            <div>${idFailed ? '<span class="badge bg-danger">ID Failed</span>' : createGradeBadge(grade, 'sm')}</div>
                         </button>
                     `;
                 }).join('')}
