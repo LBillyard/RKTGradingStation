@@ -144,7 +144,13 @@ class WIAScanner(BaseScanner):
                         logger.debug(f"Format {ext} not supported: {fmt_err}")
 
             if image_file is None:
-                raise RuntimeError("Scanner did not return image data — no supported transfer format found")
+                raise RuntimeError(
+                    "Scanner did not return image data. "
+                    "Common causes: (1) The scanner transport lock is engaged — "
+                    "unlock the switch on the bottom of the scanner. "
+                    "(2) The scanner lid is not closed properly. "
+                    "(3) The scanner is warming up — wait a few seconds and retry."
+                )
 
             # Save to temp file and load with PIL
             temp_path = os.path.join(tempfile.gettempdir(), f"rkt_scan_{int(time.time())}{temp_ext}")

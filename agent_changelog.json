@@ -1,5 +1,29 @@
 [
   {
+    "version": "1.4.0",
+    "date": "2026-03-19",
+    "type": "release",
+    "title": "Scanner Lock Detection & WIA2 Compatibility",
+    "changes": [
+      {
+        "category": "fix",
+        "description": "Scanner lock detection — when the Canon LiDE 400 transport lock is engaged, the agent now shows a clear error message explaining the cause instead of silently failing"
+      },
+      {
+        "category": "fix",
+        "description": "Confirmed WIA scanning works with Python 3.14 and Canon LiDE 400 at 150/300/600 DPI (300 DPI: 25MB, 45s scan time)"
+      },
+      {
+        "category": "improvement",
+        "description": "Better error messages for all scan failure modes: lock engaged, lid not closed, scanner warming up, device not found"
+      },
+      {
+        "category": "improvement",
+        "description": "Canon IJ Scan Utility (ScanGear) now bundled in full driver install for maximum compatibility"
+      }
+    ]
+  },
+  {
     "version": "1.3.0",
     "date": "2026-03-19",
     "type": "release",
