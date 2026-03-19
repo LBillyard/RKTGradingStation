@@ -764,46 +764,159 @@ function renderCenteringDiagram(data) {
         return;
     }
 
-    const [lrLeft] = data.centering_ratio_lr.split('/').map(Number);
-    const [tbTop] = data.centering_ratio_tb.split('/').map(Number);
-    const maxOffset = 35;
-    const offsetX = ((lrLeft - 50) / 50) * maxOffset;
-    const offsetY = ((tbTop - 50) / 50) * maxOffset;
+    const [lrLeft, lrRight] = data.centering_ratio_lr.split('/').map(Number);
+    const [tbTop, tbBottom] = data.centering_ratio_tb.split('/').map(Number);
     const score = data.centering_score || 0;
-    const dotColor = score >= 9 ? '#22c55e' : score >= 7 ? '#3b82f6' : score >= 5 ? '#f59e0b' : '#ef4444';
-    const sz = 100;
-    const c = sz / 2;
+
+    // Border pixel measurements from grading details
+    const details = data.centering_details || {};
+    const bLeft = details.border_left || 0;
+    const bRight = details.border_right || 0;
+    const bTop = details.border_top || 0;
+    const bBottom = details.border_bottom || 0;
+
+    // PSA-style proportional border diagram
+    const sz = 160;
+    const pad = 15;
+    const cardW = sz - pad * 2;
+    const cardH = cardW * 1.4; // Card aspect ratio
+    const svgH = cardH + pad * 2;
+
+    // Calculate proportional border widths for the diagram
+    const maxBorder = 20; // max visual border width in SVG
+    const totalLR = bLeft + bRight || 100;
+    const totalTB = bTop + bBottom || 100;
+    const vLeft = Math.max(3, (bLeft / totalLR) * maxBorder * 2);
+    const vRight = Math.max(3, (bRight / totalLR) * maxBorder * 2);
+    const vTop = Math.max(3, (bTop / totalTB) * maxBorder * 2);
+    const vBottom = Math.max(3, (bBottom / totalTB) * maxBorder * 2);
+
+    // Colors based on balance
+    const lrBalance = Math.abs(lrLeft - 50);
+    const tbBalance = Math.abs(tbTop - 50);
+    const lrColor = lrBalance <= 5 ? '#22c55e' : lrBalance <= 10 ? '#3b82f6' : lrBalance <= 15 ? '#f59e0b' : '#ef4444';
+    const tbColor = tbBalance <= 5 ? '#22c55e' : tbBalance <= 10 ? '#3b82f6' : tbBalance <= 15 ? '#f59e0b' : '#ef4444';
+
+    // Artwork area (inner card)
+    const artX = pad + vLeft;
+    const artY = pad + vTop;
+    const artW = cardW - vLeft - vRight;
+    const artH = cardH - vTop - vBottom;
 
     el.innerHTML = `
-        <div class="d-flex align-items-center gap-3">
+        <div class="d-flex gap-3 align-items-start">
+            <!-- PSA-Style Border Diagram -->
             <div>
-                <svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}"
-                     style="border:1px solid var(--bs-border-color);border-radius:6px;background:var(--bs-tertiary-bg);">
-                    <rect x="5" y="5" width="90" height="90" rx="3"
-                          fill="none" stroke="var(--bs-border-color)" stroke-width="1" stroke-dasharray="3,3"/>
-                    <line x1="${c}" y1="10" x2="${c}" y2="90" stroke="var(--bs-border-color)" stroke-width="0.5"/>
-                    <line x1="10" y1="${c}" x2="90" y2="${c}" stroke="var(--bs-border-color)" stroke-width="0.5"/>
-                    <circle cx="${c + offsetX}" cy="${c + offsetY}" r="5"
-                            fill="${dotColor}" stroke="#fff" stroke-width="1.5" opacity="0.9"/>
-                    <circle cx="${c}" cy="${c}" r="2" fill="none" stroke="var(--bs-secondary-color)" stroke-width="0.5"/>
+                <svg width="${sz}" height="${svgH}" viewBox="0 0 ${sz} ${svgH}"
+                     style="border:1px solid var(--bs-border-color);border-radius:8px;background:var(--bs-tertiary-bg);">
+                    <!-- Card outline -->
+                    <rect x="${pad}" y="${pad}" width="${cardW}" height="${cardH}" rx="4"
+                          fill="none" stroke="var(--bs-border-color)" stroke-width="1.5"/>
+
+                    <!-- Left border (filled proportionally) -->
+                    <rect x="${pad}" y="${pad}" width="${vLeft}" height="${cardH}" rx="4"
+                          fill="${lrColor}" opacity="0.2"/>
+                    <!-- Right border -->
+                    <rect x="${pad + cardW - vRight}" y="${pad}" width="${vRight}" height="${cardH}" rx="4"
+                          fill="${lrColor}" opacity="0.2"/>
+                    <!-- Top border -->
+                    <rect x="${pad}" y="${pad}" width="${cardW}" height="${vTop}" rx="4"
+                          fill="${tbColor}" opacity="0.2"/>
+                    <!-- Bottom border -->
+                    <rect x="${pad}" y="${pad + cardH - vBottom}" width="${cardW}" height="${vBottom}" rx="4"
+                          fill="${tbColor}" opacity="0.2"/>
+
+                    <!-- Artwork area outline -->
+                    <rect x="${artX}" y="${artY}" width="${artW}" height="${artH}" rx="2"
+                          fill="none" stroke="var(--bs-secondary-color)" stroke-width="0.5" stroke-dasharray="3,3"/>
+
+                    <!-- Center crosshair -->
+                    <line x1="${sz/2}" y1="${pad + 5}" x2="${sz/2}" y2="${pad + cardH - 5}"
+                          stroke="var(--bs-secondary-color)" stroke-width="0.5" stroke-dasharray="2,4"/>
+                    <line x1="${pad + 5}" y1="${svgH/2}" x2="${pad + cardW - 5}" y2="${svgH/2}"
+                          stroke="var(--bs-secondary-color)" stroke-width="0.5" stroke-dasharray="2,4"/>
+
+                    <!-- Border measurement labels -->
+                    <text x="${pad + vLeft/2}" y="${svgH/2}" text-anchor="middle" font-size="8"
+                          fill="${lrColor}" font-weight="bold" transform="rotate(-90,${pad + vLeft/2},${svgH/2})">${bLeft}px</text>
+                    <text x="${pad + cardW - vRight/2}" y="${svgH/2}" text-anchor="middle" font-size="8"
+                          fill="${lrColor}" font-weight="bold" transform="rotate(90,${pad + cardW - vRight/2},${svgH/2})">${bRight}px</text>
+                    <text x="${sz/2}" y="${pad + vTop - 2}" text-anchor="middle" font-size="8"
+                          fill="${tbColor}" font-weight="bold">${bTop}px</text>
+                    <text x="${sz/2}" y="${pad + cardH - 2}" text-anchor="middle" font-size="8"
+                          fill="${tbColor}" font-weight="bold">${bBottom}px</text>
                 </svg>
             </div>
+
+            <!-- Centering Stats -->
             <div class="flex-grow-1">
-                <div class="d-flex justify-content-between mb-1">
-                    <span class="text-muted small">Left-Right</span>
-                    <span class="fw-bold">${data.centering_ratio_lr}</span>
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted small">Left / Right</span>
+                        <span class="fw-bold" style="color:${lrColor}">${data.centering_ratio_lr}</span>
+                    </div>
+                    <div class="progress" style="height:6px;">
+                        <div class="progress-bar" style="width:${lrLeft}%;background:${lrColor};"></div>
+                    </div>
                 </div>
-                <div class="d-flex justify-content-between mb-1">
-                    <span class="text-muted small">Top-Bottom</span>
-                    <span class="fw-bold">${data.centering_ratio_tb}</span>
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted small">Top / Bottom</span>
+                        <span class="fw-bold" style="color:${tbColor}">${data.centering_ratio_tb}</span>
+                    </div>
+                    <div class="progress" style="height:6px;">
+                        <div class="progress-bar" style="width:${tbTop}%;background:${tbColor};"></div>
+                    </div>
                 </div>
-                <div class="d-flex justify-content-between">
+                <div class="d-flex justify-content-between align-items-center mb-2">
                     <span class="text-muted small">Score</span>
                     ${createGradeBadge(score, 'sm')}
                 </div>
+                ${bLeft ? `
+                <div class="small text-muted mt-1 border-top pt-1">
+                    <div class="d-flex justify-content-between">
+                        <span>L: ${bLeft}px</span><span>R: ${bRight}px</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>T: ${bTop}px</span><span>B: ${bBottom}px</span>
+                    </div>
+                </div>` : ''}
             </div>
         </div>
     `;
+
+    // Add centering overlay to the card image viewer
+    _addCenteringOverlayToViewer(bLeft, bRight, bTop, bBottom, lrLeft, tbTop);
+}
+
+function _addCenteringOverlayToViewer(bLeft, bRight, bTop, bBottom, lrLeft, tbTop) {
+    // Add centering guide lines on the card image via the viewer
+    if (!window._gradeViewer || !bLeft) return;
+
+    const viewer = window._gradeViewer;
+    // Store centering data for toggle
+    viewer._centeringData = { bLeft, bRight, bTop, bBottom, lrLeft, tbTop };
+
+    // Add toggle button if not already present
+    if (!document.getElementById('btn-centering-overlay')) {
+        const toolbar = document.querySelector('.card-image-toolbar, .btn-group');
+        if (toolbar) {
+            const btn = document.createElement('button');
+            btn.id = 'btn-centering-overlay';
+            btn.className = 'btn btn-outline-secondary btn-sm';
+            btn.innerHTML = '<i class="bi bi-grid-3x3"></i> Centering';
+            btn.title = 'Toggle centering guides';
+            btn.addEventListener('click', () => {
+                btn.classList.toggle('active');
+                if (btn.classList.contains('active')) {
+                    viewer.addCenteringOverlay(bLeft, bRight, bTop, bBottom);
+                } else {
+                    viewer.removeCenteringOverlay();
+                }
+            });
+            toolbar.appendChild(btn);
+        }
+    }
 }
 
 function renderGradeCaps(caps) {

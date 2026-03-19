@@ -51,7 +51,7 @@ class OpenRouterSettings(BaseModel):
     """OpenRouter AI API configuration."""
     api_key: str = ""
     model: str = "google/gemini-2.0-flash-001"
-    enabled: bool = False
+    enabled: bool = True
 
 
 class SecuritySettings(BaseModel):

@@ -308,6 +308,10 @@ export class ImageViewer {
             if (this._overlaysVisible) {
                 this._renderOverlays(ctx);
             }
+            // Draw centering guide lines
+            if (this._centeringLines) {
+                this._renderCenteringOverlay(ctx);
+            }
 
             ctx.restore();
         }
@@ -441,5 +445,106 @@ export class ImageViewer {
                 return;
             }
         }
+    }
+
+    // ── Centering Overlay ────────────────────────────────────────────
+
+    addCenteringOverlay(bLeft, bRight, bTop, bBottom) {
+        this._centeringLines = { bLeft, bRight, bTop, bBottom };
+        this._render();
+    }
+
+    removeCenteringOverlay() {
+        this._centeringLines = null;
+        this._render();
+    }
+
+    _renderCenteringOverlay(ctx) {
+        if (!this._centeringLines || !this.image) return;
+
+        const { bLeft, bRight, bTop, bBottom } = this._centeringLines;
+        const imgW = this.image.width;
+        const imgH = this.image.height;
+
+        ctx.save();
+
+        // Border lines (green dashed)
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 2 / this.zoom;
+        ctx.setLineDash([8 / this.zoom, 4 / this.zoom]);
+
+        // Left border
+        ctx.beginPath();
+        ctx.moveTo(bLeft, 0);
+        ctx.lineTo(bLeft, imgH);
+        ctx.stroke();
+
+        // Right border
+        ctx.beginPath();
+        ctx.moveTo(imgW - bRight, 0);
+        ctx.lineTo(imgW - bRight, imgH);
+        ctx.stroke();
+
+        // Top border
+        ctx.beginPath();
+        ctx.moveTo(0, bTop);
+        ctx.lineTo(imgW, bTop);
+        ctx.stroke();
+
+        // Bottom border
+        ctx.beginPath();
+        ctx.moveTo(0, imgH - bBottom);
+        ctx.lineTo(imgW, imgH - bBottom);
+        ctx.stroke();
+
+        // Center crosshair (white dashed)
+        ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+        ctx.lineWidth = 1 / this.zoom;
+        ctx.setLineDash([4 / this.zoom, 6 / this.zoom]);
+
+        const cx = imgW / 2;
+        const cy = imgH / 2;
+
+        ctx.beginPath();
+        ctx.moveTo(cx, 0);
+        ctx.lineTo(cx, imgH);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, cy);
+        ctx.lineTo(imgW, cy);
+        ctx.stroke();
+
+        // Border width labels
+        ctx.setLineDash([]);
+        const fontSize = Math.max(12, 16 / this.zoom);
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.textAlign = 'center';
+
+        // Left label
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(bLeft / 2 - 20 / this.zoom, cy - fontSize, 40 / this.zoom, fontSize + 4 / this.zoom);
+        ctx.fillStyle = '#22c55e';
+        ctx.fillText(`${bLeft}`, bLeft / 2, cy - 2 / this.zoom);
+
+        // Right label
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(imgW - bRight / 2 - 20 / this.zoom, cy - fontSize, 40 / this.zoom, fontSize + 4 / this.zoom);
+        ctx.fillStyle = '#22c55e';
+        ctx.fillText(`${bRight}`, imgW - bRight / 2, cy - 2 / this.zoom);
+
+        // Top label
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(cx - 20 / this.zoom, bTop / 2 - fontSize / 2, 40 / this.zoom, fontSize + 4 / this.zoom);
+        ctx.fillStyle = '#22c55e';
+        ctx.fillText(`${bTop}`, cx, bTop / 2 + fontSize / 2 - 2 / this.zoom);
+
+        // Bottom label
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(cx - 20 / this.zoom, imgH - bBottom / 2 - fontSize / 2, 40 / this.zoom, fontSize + 4 / this.zoom);
+        ctx.fillStyle = '#22c55e';
+        ctx.fillText(`${bBottom}`, cx, imgH - bBottom / 2 + fontSize / 2 - 2 / this.zoom);
+
+        ctx.restore();
     }
 }

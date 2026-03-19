@@ -57,6 +57,16 @@ async def submit_expert_grade(req: ExpertGradeRequest, db: Session = Depends(get
             "card_record_id": req.card_record_id,
             "operator": req.operator,
         })
+
+        # Auto-update grading brain with learned calibrations
+        try:
+            from app.services.training.service import update_grading_brain
+            updated = update_grading_brain(db)
+            if updated:
+                result["brain_updated"] = True
+        except Exception as brain_err:
+            logger.warning("Brain auto-update failed: %s", brain_err)
+
         return result
     except ValueError as e:
         raise HTTPException(400, str(e))

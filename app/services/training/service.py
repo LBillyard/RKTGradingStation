@@ -453,3 +453,104 @@ def _load_overrides() -> dict:
 def _save_overrides(overrides: dict) -> None:
     OVERRIDES_PATH.parent.mkdir(parents=True, exist_ok=True)
     OVERRIDES_PATH.write_text(json.dumps(overrides, indent=2))
+
+
+# ── Grading Brain Auto-Update ─────────────────────────────────────────
+
+BRAIN_PATH = Path("data/grading_brain.md")
+BRAIN_UPDATE_THRESHOLD = 10  # Update brain after every N new training grades
+
+
+def update_grading_brain(db: Session) -> bool:
+    """Auto-update the grading brain document with learned calibrations.
+
+    Called after expert grades are submitted. Analyses the accumulated
+    training data and appends insights to the brain's Learned Calibrations
+    section.
+    """
+    total = db.query(TrainingGrade).filter(
+        TrainingGrade.ai_final.isnot(None)
+    ).count()
+
+    if total < BRAIN_UPDATE_THRESHOLD:
+        logger.debug("Not enough training data (%d/%d) to update brain", total, BRAIN_UPDATE_THRESHOLD)
+        return False
+
+    # Compute aggregate stats
+    rows = db.query(TrainingGrade).filter(TrainingGrade.ai_final.isnot(None)).all()
+
+    deltas = {
+        "centering": [r.delta_centering for r in rows if r.delta_centering is not None],
+        "corners": [r.delta_corners for r in rows if r.delta_corners is not None],
+        "edges": [r.delta_edges for r in rows if r.delta_edges is not None],
+        "surface": [r.delta_surface for r in rows if r.delta_surface is not None],
+        "final": [r.delta_final for r in rows if r.delta_final is not None],
+    }
+
+    insights = []
+    for sub, vals in deltas.items():
+        if not vals:
+            continue
+        avg = sum(vals) / len(vals)
+        if abs(avg) > 0.3:
+            direction = "over-grades" if avg > 0 else "under-grades"
+            insights.append(
+                f"- **{sub.title()}**: AI {direction} by {abs(avg):.1f} on average "
+                f"(based on {len(vals)} samples). "
+                f"{'Tighten' if avg > 0 else 'Loosen'} {sub} thresholds."
+            )
+
+    # Count language-specific patterns
+    jp_rows = [r for r in rows if r.card_record_id and _get_card_language(r.card_record_id, db) == "ja"]
+    if len(jp_rows) >= 5:
+        jp_surface = [r.delta_surface for r in jp_rows if r.delta_surface is not None]
+        if jp_surface:
+            avg_jp = sum(jp_surface) / len(jp_surface)
+            if abs(avg_jp) > 0.5:
+                direction = "over-penalises" if avg_jp < 0 else "under-penalises"
+                insights.append(
+                    f"- **Japanese Cards Surface**: AI {direction} surface by {abs(avg_jp):.1f} "
+                    f"on Japanese cards ({len(jp_rows)} samples). Adjust holo/texture tolerance."
+                )
+
+    if not insights:
+        logger.info("No significant calibration insights from %d training samples", total)
+        return False
+
+    # Build learned calibrations section
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    learned_section = f"""
+## Learned Calibrations
+
+_Last updated: {timestamp} ({total} training samples)_
+
+{chr(10).join(insights)}
+
+### Summary
+- Total training samples: {total}
+- Average final grade delta (AI - Expert): {sum(deltas['final']) / len(deltas['final']):+.2f}
+- Match rate (within 0.5): {sum(1 for d in deltas['final'] if abs(d) <= 0.5) / len(deltas['final']) * 100:.0f}%
+"""
+
+    # Update the brain document
+    if BRAIN_PATH.exists():
+        brain = BRAIN_PATH.read_text(encoding="utf-8")
+        # Replace existing learned calibrations section
+        marker = "## Learned Calibrations"
+        if marker in brain:
+            brain = brain[:brain.index(marker)] + learned_section.strip() + "\n"
+        else:
+            brain += "\n\n" + learned_section.strip() + "\n"
+        BRAIN_PATH.write_text(brain, encoding="utf-8")
+    else:
+        BRAIN_PATH.parent.mkdir(parents=True, exist_ok=True)
+        BRAIN_PATH.write_text(learned_section.strip(), encoding="utf-8")
+
+    logger.info("Updated grading brain with %d insights from %d samples", len(insights), total)
+    return True
+
+
+def _get_card_language(card_record_id: str, db: Session) -> Optional[str]:
+    """Get the language of a card record."""
+    card = db.query(CardRecord).filter(CardRecord.id == card_record_id).first()
+    return card.language if card else None
