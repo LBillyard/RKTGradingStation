@@ -159,7 +159,17 @@ async def acquire_scan(req: ScanRequest):
 
         result = await asyncio.to_thread(scanner.scan, req.dpi)
 
-        if hasattr(result, 'image_path') and result.image_path:
+        # Handle different result types
+        image_data = None
+        image_path = None
+
+        if hasattr(result, 'image') and result.image is not None:
+            # ScanResult with PIL Image — save to temp and encode
+            import io
+            buf = io.BytesIO()
+            result.image.save(buf, format="PNG")
+            image_data = base64.b64encode(buf.getvalue()).decode()
+        elif hasattr(result, 'image_path') and result.image_path:
             image_path = result.image_path
         elif isinstance(result, str):
             image_path = result
@@ -168,14 +178,15 @@ async def acquire_scan(req: ScanRequest):
         else:
             raise RuntimeError(f"Unexpected scan result type: {type(result)}")
 
-        # Read and encode the image
-        with open(image_path, "rb") as f:
-            image_data = base64.b64encode(f.read()).decode()
+        # Read from file if we got a path
+        if image_data is None and image_path:
+            with open(image_path, "rb") as f:
+                image_data = base64.b64encode(f.read()).decode()
 
         return {
             "status": "success",
             "image_data": image_data,
-            "image_path": image_path,
+            "image_path": image_path or "memory",
             "format": "png",
         }
     except Exception as e:
