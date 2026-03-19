@@ -158,12 +158,15 @@ class AgentClient {
     /**
      * Make a request to the agent.
      */
-    async request(method, path, data = null) {
+    async request(method, path, data = null, timeoutMs = 60000) {
         const url = `${this.baseUrl}${path}`;
         const config = { method, headers: {} };
         if (data) {
             config.headers['Content-Type'] = 'application/json';
             config.body = JSON.stringify(data);
+        }
+        if (timeoutMs) {
+            config.signal = AbortSignal.timeout(timeoutMs);
         }
         const resp = await fetch(url, config);
         if (!resp.ok) {
@@ -178,7 +181,7 @@ class AgentClient {
     }
 
     // Hardware operations
-    async scan(dpi = 600)   { return this.request('POST', '/scan', { dpi }); }
+    async scan(dpi = 600)   { return this.request('POST', '/scan', { dpi }, 300000); }  // 5 min timeout for high DPI scans
     async print(imageUrl, printerName = null) {
         return this.request('POST', '/print', { image_url: imageUrl, printer_name: printerName });
     }
