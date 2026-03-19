@@ -1,5 +1,37 @@
 [
   {
+    "version": "1.3.0",
+    "date": "2026-03-19",
+    "type": "release",
+    "title": "Scanner Driver Bundling & Auto-Install",
+    "changes": [
+      {
+        "category": "feature",
+        "description": "Canon LiDE 400 ScanGear driver bundled in installer — automatically installs during setup so the scanner works out of the box"
+      },
+      {
+        "category": "feature",
+        "description": "Agent auto-detects on startup if Canon driver is missing and installs it silently from the bundled copy"
+      },
+      {
+        "category": "fix",
+        "description": "Scanner auto-connect — agent now automatically connects to the first available scanner before scanning, no manual connect() call needed"
+      },
+      {
+        "category": "fix",
+        "description": "WIA transfer format fallback — tries default format first, then BMP, PNG, JPEG, TIFF for maximum scanner compatibility"
+      },
+      {
+        "category": "fix",
+        "description": "Scan page in cloud mode now routes scan commands through the local agent instead of the cloud server (which has no scanner)"
+      },
+      {
+        "category": "improvement",
+        "description": "Scanner status badge on scan page shows actual scanner name (e.g. CanoScan LiDE 400) instead of Mock Mode when agent is connected"
+      }
+    ]
+  },
+  {
     "version": "1.2.1",
     "date": "2026-03-18",
     "type": "patch",

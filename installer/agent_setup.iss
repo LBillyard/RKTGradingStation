@@ -8,7 +8,7 @@
 
 [Setup]
 AppName=RKT Station Agent
-AppVersion=1.2.1
+AppVersion=1.3.0
 AppPublisher=RKT Grading
 AppPublisherURL=https://rktgradingstation.co.uk
 DefaultDirName={autopf}\RKT Station Agent

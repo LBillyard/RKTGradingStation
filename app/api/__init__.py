@@ -129,7 +129,7 @@ def create_app() -> FastAPI:
     logger.info(f"App mode: {settings.mode} — registered routes accordingly")
 
     # Agent version and download endpoints (served by cloud)
-    _AGENT_LATEST = "1.2.1"
+    _AGENT_LATEST = "1.3.0"
 
     if settings.mode in ("desktop", "cloud"):
         @app.get("/api/agent/version")
