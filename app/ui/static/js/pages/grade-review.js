@@ -510,7 +510,16 @@ function attachEventListeners(container) {
         viewer?.resetView();
         updateZoomDisplay();
     });
-    container.querySelector('#grade-toggle-overlays')?.addEventListener('click', () => viewer?.toggleOverlays());
+    container.querySelector('#grade-toggle-overlays')?.addEventListener('click', () => {
+        if (viewer) {
+            viewer.toggleOverlays();
+            const btn = container.querySelector('#grade-toggle-overlays');
+            if (btn) {
+                btn.classList.toggle('btn-secondary');
+                btn.classList.toggle('btn-success');
+            }
+        }
+    });
     container.querySelector('#grade-zoom-in')?.addEventListener('click', () => {
         viewer?.zoomIn();
         updateZoomDisplay();
@@ -891,30 +900,31 @@ function renderCenteringDiagram(data) {
 
 function _addCenteringOverlayToViewer(bLeft, bRight, bTop, bBottom, lrLeft, tbTop) {
     // Add centering guide lines on the card image via the viewer
-    if (!window._gradeViewer || !bLeft) return;
+    if (!viewer || !bLeft) return;
 
-    const viewer = window._gradeViewer;
     // Store centering data for toggle
     viewer._centeringData = { bLeft, bRight, bTop, bBottom, lrLeft, tbTop };
 
-    // Add toggle button if not already present
+    // Add toggle button next to the Overlays button
     if (!document.getElementById('btn-centering-overlay')) {
-        const toolbar = document.querySelector('.card-image-toolbar, .btn-group');
-        if (toolbar) {
+        const overlaysBtn = document.getElementById('grade-toggle-overlays');
+        if (overlaysBtn && overlaysBtn.parentNode) {
             const btn = document.createElement('button');
             btn.id = 'btn-centering-overlay';
-            btn.className = 'btn btn-outline-secondary btn-sm';
-            btn.innerHTML = '<i class="bi bi-grid-3x3"></i> Centering';
+            btn.className = 'btn btn-sm btn-secondary ms-1';
+            btn.innerHTML = '<i class="bi bi-grid-3x3 me-1"></i>Centering';
             btn.title = 'Toggle centering guides';
             btn.addEventListener('click', () => {
                 btn.classList.toggle('active');
+                btn.classList.toggle('btn-secondary');
+                btn.classList.toggle('btn-success');
                 if (btn.classList.contains('active')) {
                     viewer.addCenteringOverlay(bLeft, bRight, bTop, bBottom);
                 } else {
                     viewer.removeCenteringOverlay();
                 }
             });
-            toolbar.appendChild(btn);
+            overlaysBtn.after(btn);
         }
     }
 }
