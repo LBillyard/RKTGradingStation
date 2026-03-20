@@ -145,7 +145,7 @@ class AppSettings(BaseSettings):
     scan_default_dpi: int = 600
     openrouter_api_key: str = ""
     openrouter_model: str = "google/gemini-2.0-flash-001"
-    openrouter_enabled: bool = False
+    openrouter_enabled: bool = True
     webhook_enabled: bool = False
     webhook_url: str = ""
     webhook_secret: str = ""

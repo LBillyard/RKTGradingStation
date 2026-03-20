@@ -181,6 +181,10 @@ async def get_grade_decision(card_id: str, db: Session = Depends(get_db)):
         "defect_count": decision.defect_count,
         "grading_confidence": decision.grading_confidence,
         "ai_review": decision.ai_review_json,
+        "grading_method": (decision.ai_review_json or {}).get("grading_method", "opencv"),
+        "grade_explanation": (decision.ai_review_json or {}).get("grade_explanation", ""),
+        "ai_model": (decision.ai_review_json or {}).get("ai_model"),
+        "centering_details": (decision.ai_review_json or {}).get("centering_details", {}),
         "created_at": decision.created_at.isoformat() if decision.created_at else None,
         "updated_at": decision.updated_at.isoformat() if decision.updated_at else None,
         "defects": [

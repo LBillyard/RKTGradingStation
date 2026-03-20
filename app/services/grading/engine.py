@@ -1087,6 +1087,19 @@ class GradingEngine:
             pass
         return val
 
+    @staticmethod
+    def _build_ai_review_json(result: dict) -> Optional[dict]:
+        """Build ai_review_json dict from grading result."""
+        ai_review = {}
+        if result.get("grading_method") == "ai_vision":
+            ai_review["grading_method"] = "ai_vision"
+            ai_review["ai_model"] = result.get("ai_model")
+            ai_review["grade_explanation"] = result.get("grade_explanation", "")
+        centering_details = result.get("centering", {}).get("details", {})
+        if centering_details:
+            ai_review["centering_details"] = centering_details
+        return ai_review or None
+
     def _save_to_db(self, card_record_id: str, result: dict) -> None:
         """Persist grading results to the database.
 
@@ -1135,6 +1148,8 @@ class GradingEngine:
                 existing.status = "graded"
                 existing.defect_count = _n(result["defect_count"])
                 existing.grading_confidence = _n(result.get("grading_confidence"))
+                # Store AI review data and centering details
+                existing.ai_review_json = self._build_ai_review_json(result)
 
                 # Remove old defect findings
                 session.query(DefectFinding).filter(
@@ -1158,6 +1173,7 @@ class GradingEngine:
                     status="graded",
                     defect_count=_n(result["defect_count"]),
                     grading_confidence=_n(result.get("grading_confidence")),
+                    ai_review_json=self._build_ai_review_json(result),
                 )
                 session.add(decision)
 
