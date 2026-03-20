@@ -1685,6 +1685,22 @@ async function loadChangelogTab() {
     // Platform changelog — non-software development updates
     const entries = [
         {
+            date: '2026-03-20',
+            version: 'Platform v1.5',
+            title: 'AI Vision Grading & Centering Overlay',
+            items: [
+                { tag: 'AI', color: '#8b5cf6', text: 'AI Vision Grading is now the primary grading method — Gemini 2.0 Flash examines card images directly, replacing OpenCV as the default' },
+                { tag: 'AI', color: '#8b5cf6', text: 'Grading Brain document (data/grading_brain.md) — persistent AI instructions with RKT grading standards, era rules, and learned calibrations' },
+                { tag: 'AI', color: '#8b5cf6', text: 'Brain Auto-Update — after every 10 expert training grades, calibration insights are appended to the grading brain automatically' },
+                { tag: 'AI', color: '#8b5cf6', text: 'Grade explanation and AI model name now stored and displayed in grade review' },
+                { tag: 'Grading', color: '#22c55e', text: 'Defect overlay toggle now works — AI text locations mapped to pixel bounding boxes on the card image' },
+                { tag: 'Grading', color: '#22c55e', text: 'Centering overlay with border pixel measurements, center crosshair, and green dashed border lines' },
+                { tag: 'Grading', color: '#22c55e', text: 'PSA-style centering diagram — proportional SVG with colour-coded borders (green→red) and measurement labels' },
+                { tag: 'Grading', color: '#22c55e', text: 'Border pixel data (left, right, top, bottom) persisted in grade decisions for overlay display' },
+                { tag: 'Config', color: '#3b82f6', text: 'OpenRouter enabled by default — AI grading activates automatically when API key is configured' },
+            ],
+        },
+        {
             date: '2026-03-18',
             version: 'Platform v1.4',
             title: 'Grading Engine Optimisation & Operations Suite',
