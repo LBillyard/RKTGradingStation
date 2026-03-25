@@ -14,6 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY app/ app/
 COPY seed_data.py .
+COPY data/grading_brain.md data/grading_brain.md
 
 # Create data directories
 RUN mkdir -p data/db data/logs
