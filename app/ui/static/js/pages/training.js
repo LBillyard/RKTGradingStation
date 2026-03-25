@@ -2,10 +2,15 @@
  * Training Mode — Expert grades cards manually, AI grades independently,
  * system shows comparison and learns from deltas.
  */
-import { api } from '../api.js';
+import { api, agent, isCloudMode } from '../api.js';
 import { showToast, escapeHtml } from '../components.js';
 
 let _currentCard = null;
+let _scanState = { sessionId: null, frontImagePath: null, backImagePath: null, pipelineResult: null, cardRecordId: null };
+
+function _resetScanState() {
+    _scanState = { sessionId: null, frontImagePath: null, backImagePath: null, pipelineResult: null, cardRecordId: null };
+}
 
 export async function init(container) {
     container.innerHTML = `
@@ -44,18 +49,50 @@ export async function init(container) {
     await loadRecentGrades();
 }
 
-export function destroy() { _currentCard = null; }
+export function destroy() {
+    _currentCard = null;
+    _resetScanState();
+}
+
+// ---------------------------------------------------------------------------
+// Step 1: Choose mode — Select Existing Card or Scan Training Card
+// ---------------------------------------------------------------------------
 
 async function showSelectStep() {
     const body = document.getElementById('step-select') || document.getElementById('training-body');
+
+    body.innerHTML = `
+        <h6 class="mb-3">Step 1: Choose how to grade</h6>
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <button class="btn btn-outline-primary w-100 py-3" id="btn-mode-select">
+                    <i class="bi bi-list-ul d-block" style="font-size:1.5rem"></i>
+                    Select Existing Card
+                </button>
+            </div>
+            <div class="col-md-6">
+                <button class="btn btn-outline-success w-100 py-3" id="btn-mode-scan">
+                    <i class="bi bi-upc-scan d-block" style="font-size:1.5rem"></i>
+                    Scan Training Card
+                </button>
+            </div>
+        </div>
+        <div id="mode-content"></div>`;
+
+    document.getElementById('btn-mode-select').addEventListener('click', renderCardSelectDropdown);
+    document.getElementById('btn-mode-scan').addEventListener('click', scanStepStart);
+}
+
+async function renderCardSelectDropdown() {
+    const content = document.getElementById('mode-content');
+    if (!content) return;
 
     try {
         const res = await api.get('/queue/list?limit=100');
         const cards = res.cards || [];
 
-        body.innerHTML = `
-            <h6 class="mb-3">Step 1: Select a card to grade</h6>
-            <div class="row g-2 mb-3">
+        content.innerHTML = `
+            <div class="row g-2">
                 <div class="col-md-8">
                     <select class="form-select" id="card-select">
                         <option value="">Choose a card...</option>
@@ -87,9 +124,338 @@ async function showSelectStep() {
             showExpertGradeStep();
         });
     } catch (e) {
-        body.innerHTML = `<div class="alert alert-warning">Could not load cards: ${escapeHtml(e.message)}</div>`;
+        content.innerHTML = `<div class="alert alert-warning">Could not load cards: ${escapeHtml(e.message)}</div>`;
     }
 }
+
+// ---------------------------------------------------------------------------
+// Scan Training Flow — T1: Scan Front + Process
+// ---------------------------------------------------------------------------
+
+async function scanStepStart() {
+    _resetScanState();
+    const body = document.getElementById('training-body');
+
+    body.innerHTML = `
+        <div class="text-center py-4" id="scan-progress">
+            <div class="spinner-border text-success mb-3" style="width:3rem;height:3rem"></div>
+            <h6 id="scan-status-text">Starting scan session...</h6>
+            <p class="text-muted small" id="scan-status-detail">Please wait</p>
+            <div class="progress mt-3" style="height:6px;max-width:400px;margin:0 auto">
+                <div class="progress-bar bg-success" id="scan-progress-bar" style="width:5%"></div>
+            </div>
+        </div>`;
+
+    const statusText = document.getElementById('scan-status-text');
+    const statusDetail = document.getElementById('scan-status-detail');
+    const progressBar = document.getElementById('scan-progress-bar');
+
+    function setProgress(pct, text, detail) {
+        if (progressBar) progressBar.style.width = pct + '%';
+        if (statusText) statusText.textContent = text;
+        if (statusDetail) statusDetail.textContent = detail || '';
+    }
+
+    try {
+        // 1. Create scan session
+        setProgress(10, 'Creating scan session...', '');
+        const op = JSON.parse(localStorage.getItem('rkt-operator') || '{}');
+        const session = await api.post('/scan/start?preset=detailed&operator=' + encodeURIComponent(op.name || 'default'));
+        _scanState.sessionId = session.session_id;
+
+        // 2. Acquire front scan
+        setProgress(20, 'Scanning front side at 600 DPI...', 'This may take 2-3 minutes');
+        const acqRes = await api.request('POST', `/scan/${_scanState.sessionId}/acquire?side=front&dpi=600`, null, {
+            signal: AbortSignal.timeout(300000)
+        });
+        _scanState.frontImagePath = acqRes.path;
+        setProgress(60, 'Scan complete. Processing card...', 'Running vision pipeline, OCR, identification, grading...');
+
+        // 3. Process pipeline
+        const pipeline = await api.request('POST', `/scan/${_scanState.sessionId}/process`, null, {
+            signal: AbortSignal.timeout(120000)
+        });
+        _scanState.pipelineResult = pipeline;
+        _scanState.cardRecordId = pipeline.card_id;
+
+        setProgress(100, 'Done!', '');
+        scanStepShowFrontResults();
+
+    } catch (e) {
+        body.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Scan failed:</strong> ${escapeHtml(e.message || 'Unknown error')}
+            </div>
+            <button class="btn btn-outline-primary" id="btn-scan-retry">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>Try Again
+            </button>
+            <button class="btn btn-outline-secondary ms-2" id="btn-scan-back">
+                <i class="bi bi-arrow-left me-1"></i>Back
+            </button>`;
+
+        document.getElementById('btn-scan-retry')?.addEventListener('click', scanStepStart);
+        document.getElementById('btn-scan-back')?.addEventListener('click', () => {
+            body.innerHTML = '<div id="step-select"></div>';
+            showSelectStep();
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Scan Training Flow — T2: Show Front AI Results
+// ---------------------------------------------------------------------------
+
+function scanStepShowFrontResults() {
+    const body = document.getElementById('training-body');
+    const r = _scanState.pipelineResult;
+    if (!r) return;
+
+    const grading = r.steps?.find(s => s.step === 'grading') || {};
+    const cardId = r.steps?.find(s => s.step === 'card_identification') || {};
+    const sub = grading.sub_scores || {};
+
+    function scoreBadge(val) {
+        if (val == null) return '<span class="text-muted">—</span>';
+        const color = val >= 9.5 ? 'success' : val >= 8 ? 'primary' : val >= 6 ? 'warning' : 'danger';
+        return `<span class="badge bg-${color}">${val}</span>`;
+    }
+
+    body.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0"><i class="bi bi-check-circle text-success me-2"></i>Front Scan Complete</h6>
+            <button class="btn btn-sm btn-outline-secondary" id="btn-start-over">
+                <i class="bi bi-arrow-left me-1"></i>Start Over
+            </button>
+        </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <div class="card bg-dark text-center p-2">
+                    ${_scanState.frontImagePath
+                        ? `<img src="/data/${escapeHtml(_scanState.frontImagePath)}" class="img-fluid rounded" style="max-height:300px;object-fit:contain" alt="Front scan">`
+                        : '<div class="text-muted py-5">No image</div>'}
+                </div>
+            </div>
+            <div class="col-md-8">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <p class="mb-2"><strong>${escapeHtml(cardId.card_name || 'Unknown Card')}</strong></p>
+                        <p class="text-muted small mb-3">${escapeHtml(cardId.set_name || '')} ${cardId.serial ? '| ' + escapeHtml(cardId.serial) : ''}</p>
+
+                        <h5 class="mb-3">AI Grade: ${scoreBadge(grading.final_grade)}</h5>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-3 text-center">
+                                <div class="small text-muted">Centering</div>
+                                ${scoreBadge(sub.centering)}
+                            </div>
+                            <div class="col-3 text-center">
+                                <div class="small text-muted">Corners</div>
+                                ${scoreBadge(sub.corners)}
+                            </div>
+                            <div class="col-3 text-center">
+                                <div class="small text-muted">Edges</div>
+                                ${scoreBadge(sub.edges)}
+                            </div>
+                            <div class="col-3 text-center">
+                                <div class="small text-muted">Surface</div>
+                                ${scoreBadge(sub.surface)}
+                            </div>
+                        </div>
+
+                        <p class="small text-muted mb-0">Defects: ${grading.defect_count ?? 0} | Confidence: ${grading.grading_confidence ? grading.grading_confidence.toFixed(0) + '%' : '—'}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-success" id="btn-scan-back-side">
+                <i class="bi bi-arrow-repeat me-1"></i>Scan Back
+            </button>
+            <button class="btn btn-outline-primary" id="btn-skip-back">
+                <i class="bi bi-arrow-right me-1"></i>Skip Back — Enter Expert Grades
+            </button>
+        </div>`;
+
+    document.getElementById('btn-start-over')?.addEventListener('click', () => {
+        _resetScanState();
+        body.innerHTML = '<div id="step-select"></div>';
+        showSelectStep();
+    });
+    document.getElementById('btn-scan-back-side')?.addEventListener('click', scanStepAcquireBack);
+    document.getElementById('btn-skip-back')?.addEventListener('click', scanStepExpertGrade);
+}
+
+// ---------------------------------------------------------------------------
+// Scan Training Flow — T3: Scan Back + Re-process
+// ---------------------------------------------------------------------------
+
+async function scanStepAcquireBack() {
+    const btnArea = document.querySelector('.d-flex.gap-2');
+    if (btnArea) {
+        btnArea.innerHTML = `
+            <div class="d-flex align-items-center">
+                <div class="spinner-border spinner-border-sm text-success me-2"></div>
+                <span>Scanning back side at 600 DPI...</span>
+            </div>`;
+    }
+
+    try {
+        // Acquire back
+        const acqRes = await api.request('POST', `/scan/${_scanState.sessionId}/acquire?side=back&dpi=600`, null, {
+            signal: AbortSignal.timeout(300000)
+        });
+        _scanState.backImagePath = acqRes.path;
+
+        if (btnArea) {
+            btnArea.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm text-primary me-2"></div>
+                    <span>Re-processing with both sides...</span>
+                </div>`;
+        }
+
+        // Re-process with both sides
+        const pipeline = await api.request('POST', `/scan/${_scanState.sessionId}/process`, null, {
+            signal: AbortSignal.timeout(120000)
+        });
+        _scanState.pipelineResult = pipeline;
+        _scanState.cardRecordId = pipeline.card_id;
+
+        scanStepShowBackResults();
+
+    } catch (e) {
+        showToast('Back scan failed: ' + (e.message || 'Unknown error'), 'danger');
+        if (btnArea) {
+            btnArea.innerHTML = `
+                <div class="d-flex gap-2">
+                    <button class="btn btn-success" id="btn-retry-back">
+                        <i class="bi bi-arrow-repeat me-1"></i>Retry Back Scan
+                    </button>
+                    <button class="btn btn-outline-primary" id="btn-skip-back2">
+                        <i class="bi bi-arrow-right me-1"></i>Skip — Enter Expert Grades
+                    </button>
+                </div>`;
+            document.getElementById('btn-retry-back')?.addEventListener('click', scanStepAcquireBack);
+            document.getElementById('btn-skip-back2')?.addEventListener('click', scanStepExpertGrade);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Scan Training Flow — T3b: Show Back Results
+// ---------------------------------------------------------------------------
+
+function scanStepShowBackResults() {
+    const body = document.getElementById('training-body');
+    const r = _scanState.pipelineResult;
+    if (!r) return;
+
+    const grading = r.steps?.find(s => s.step === 'grading') || {};
+    const cardId = r.steps?.find(s => s.step === 'card_identification') || {};
+    const sub = grading.sub_scores || {};
+
+    function scoreBadge(val) {
+        if (val == null) return '<span class="text-muted">—</span>';
+        const color = val >= 9.5 ? 'success' : val >= 8 ? 'primary' : val >= 6 ? 'warning' : 'danger';
+        return `<span class="badge bg-${color}">${val}</span>`;
+    }
+
+    body.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="mb-0"><i class="bi bi-check-circle text-success me-2"></i>Front &amp; Back Scan Complete</h6>
+            <button class="btn btn-sm btn-outline-secondary" id="btn-start-over2">
+                <i class="bi bi-arrow-left me-1"></i>Start Over
+            </button>
+        </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <div class="card bg-dark text-center p-2">
+                    <div class="small text-white-50 mb-1">Front</div>
+                    ${_scanState.frontImagePath
+                        ? `<img src="/data/${escapeHtml(_scanState.frontImagePath)}" class="img-fluid rounded" style="max-height:200px;object-fit:contain" alt="Front">`
+                        : '<div class="text-muted py-3">—</div>'}
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-dark text-center p-2">
+                    <div class="small text-white-50 mb-1">Back</div>
+                    ${_scanState.backImagePath
+                        ? `<img src="/data/${escapeHtml(_scanState.backImagePath)}" class="img-fluid rounded" style="max-height:200px;object-fit:contain" alt="Back">`
+                        : '<div class="text-muted py-3">—</div>'}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <p class="mb-1"><strong>${escapeHtml(cardId.card_name || 'Unknown Card')}</strong></p>
+                        <p class="text-muted small mb-2">${escapeHtml(cardId.set_name || '')} ${cardId.serial ? '| ' + escapeHtml(cardId.serial) : ''}</p>
+
+                        <h5 class="mb-3">AI Grade: ${scoreBadge(grading.final_grade)}</h5>
+
+                        <div class="row g-2 mb-2">
+                            <div class="col-3 text-center">
+                                <div class="small text-muted">Centering</div>
+                                ${scoreBadge(sub.centering)}
+                            </div>
+                            <div class="col-3 text-center">
+                                <div class="small text-muted">Corners</div>
+                                ${scoreBadge(sub.corners)}
+                            </div>
+                            <div class="col-3 text-center">
+                                <div class="small text-muted">Edges</div>
+                                ${scoreBadge(sub.edges)}
+                            </div>
+                            <div class="col-3 text-center">
+                                <div class="small text-muted">Surface</div>
+                                ${scoreBadge(sub.surface)}
+                            </div>
+                        </div>
+
+                        <p class="small text-muted mb-0">Defects: ${grading.defect_count ?? 0} | Confidence: ${grading.grading_confidence ? grading.grading_confidence.toFixed(0) + '%' : '—'}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button class="btn btn-primary" id="btn-enter-expert">
+            <i class="bi bi-pencil-square me-1"></i>Enter Expert Grades
+        </button>`;
+
+    document.getElementById('btn-start-over2')?.addEventListener('click', () => {
+        _resetScanState();
+        body.innerHTML = '<div id="step-select"></div>';
+        showSelectStep();
+    });
+    document.getElementById('btn-enter-expert')?.addEventListener('click', scanStepExpertGrade);
+}
+
+// ---------------------------------------------------------------------------
+// Scan Training Flow — T4: Bridge to Expert Grade Form
+// ---------------------------------------------------------------------------
+
+function scanStepExpertGrade() {
+    const r = _scanState.pipelineResult;
+    const cardId = r?.steps?.find(s => s.step === 'card_identification') || {};
+    const grading = r?.steps?.find(s => s.step === 'grading') || {};
+
+    _currentCard = {
+        id: _scanState.cardRecordId || r?.card_id,
+        card_name: cardId.card_name || 'Unknown',
+        set_name: cardId.set_name || '',
+        serial_number: cardId.serial || '',
+        ai_grade: grading.final_grade || '',
+    };
+
+    showExpertGradeStep();
+}
+
+// ---------------------------------------------------------------------------
+// Step 2: Expert Grade Form (shared by both flows)
+// ---------------------------------------------------------------------------
 
 function showExpertGradeStep() {
     const body = document.getElementById('training-body');
@@ -98,7 +464,12 @@ function showExpertGradeStep() {
     body.innerHTML = `
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h6 class="mb-0">Step 2: Enter your expert grades</h6>
-            <span class="badge bg-secondary">${escapeHtml(c.serial_number)}</span>
+            <div>
+                <span class="badge bg-secondary me-2">${escapeHtml(c.serial_number)}</span>
+                <button class="btn btn-sm btn-outline-secondary" id="btn-back-start">
+                    <i class="bi bi-arrow-left me-1"></i>Start Over
+                </button>
+            </div>
         </div>
         <p class="text-muted small mb-3"><strong>${escapeHtml(c.card_name)}</strong> — ${escapeHtml(c.set_name)}</p>
 
@@ -147,6 +518,14 @@ function showExpertGradeStep() {
         </div>
         <div id="submit-status" class="mt-3"></div>`;
 
+    // "Start Over" button
+    document.getElementById('btn-back-start')?.addEventListener('click', () => {
+        _currentCard = null;
+        _resetScanState();
+        body.innerHTML = '<div id="step-select"></div>';
+        showSelectStep();
+    });
+
     // Auto-compute weighted grade
     const inputs = ['exp-centering', 'exp-corners', 'exp-edges', 'exp-surface'];
     inputs.forEach(id => {
@@ -188,6 +567,10 @@ function showExpertGradeStep() {
         }
     });
 }
+
+// ---------------------------------------------------------------------------
+// Step 3: Comparison (shared by both flows)
+// ---------------------------------------------------------------------------
 
 function showComparisonStep(data) {
     const body = document.getElementById('training-body');
@@ -232,7 +615,7 @@ function showComparisonStep(data) {
         ${expert.defect_notes ? `
             <div class="mb-3">
                 <strong class="small">Expert Notes:</strong>
-                <p class="small text-muted mb-0">${expert.defect_notes}</p>
+                <p class="small text-muted mb-0">${escapeHtml(expert.defect_notes)}</p>
             </div>` : ''}
 
         ${data.ai_defects?.length ? `
@@ -240,7 +623,7 @@ function showComparisonStep(data) {
                 <strong class="small">AI Detected Defects (${data.ai_defects.length}):</strong>
                 <div class="small">
                     ${data.ai_defects.map(d => `
-                        <span class="badge bg-${d.severity === 'critical' ? 'danger' : d.severity === 'major' ? 'warning text-dark' : 'secondary'} me-1 mb-1">${d.category}: ${d.defect_type} (${d.severity})</span>
+                        <span class="badge bg-${d.severity === 'critical' ? 'danger' : d.severity === 'major' ? 'warning text-dark' : 'secondary'} me-1 mb-1">${escapeHtml(d.category)}: ${escapeHtml(d.defect_type)} (${escapeHtml(d.severity)})</span>
                     `).join('')}
                 </div>
             </div>` : ''}
@@ -251,10 +634,15 @@ function showComparisonStep(data) {
 
     document.getElementById('btn-grade-another')?.addEventListener('click', () => {
         _currentCard = null;
-        document.getElementById('training-body').innerHTML = '<div id="step-select"></div>';
+        _resetScanState();
+        body.innerHTML = '<div id="step-select"></div>';
         showSelectStep();
     });
 }
+
+// ---------------------------------------------------------------------------
+// Recent Training Grades List
+// ---------------------------------------------------------------------------
 
 async function loadRecentGrades() {
     const tbody = document.getElementById('training-tbody');
