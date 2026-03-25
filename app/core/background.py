@@ -38,6 +38,8 @@ class BackgroundTaskRunner:
         status = TaskStatus(task_id=task_id, status="pending")
         with self._lock:
             self.tasks[task_id] = status
+            # P10: Prune completed/failed tasks older than 1 hour on each submit
+            self._prune_completed_tasks()
 
         loop = asyncio.get_event_loop()
 
@@ -74,6 +76,21 @@ class BackgroundTaskRunner:
             if task_id in self.tasks:
                 self.tasks[task_id].progress = progress
                 self.tasks[task_id].message = message
+
+    def _prune_completed_tasks(self, max_age_seconds: int = 3600) -> None:
+        """Remove completed/failed tasks older than max_age_seconds.
+
+        Called internally under self._lock — do NOT acquire the lock again.
+        """
+        now = datetime.now(timezone.utc)
+        stale = [
+            tid for tid, s in self.tasks.items()
+            if s.completed_at and (now - s.completed_at).total_seconds() > max_age_seconds
+        ]
+        for tid in stale:
+            del self.tasks[tid]
+        if stale:
+            logger.debug("Pruned %d completed background tasks", len(stale))
 
     def cleanup_completed(self, max_age_seconds: int = 3600) -> int:
         """Remove completed tasks older than max_age_seconds."""

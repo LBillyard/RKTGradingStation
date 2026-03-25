@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -46,7 +48,9 @@ def sign_image(image_hash: str, station_id: str, operator_name: str, secret: str
 
     # Create HMAC signature
     message = json.dumps(payload, sort_keys=True, separators=(",", ":"))
-    signing_key = secret or station_id or "rkt-default-signing-key"
+    signing_key = secret or settings.auth_secret
+    if not signing_key:
+        raise ValueError("No signing key available: configure auth_secret or provide a secret")
     signature = hmac.new(
         signing_key.encode(), message.encode(), hashlib.sha256
     ).hexdigest()
@@ -73,7 +77,9 @@ def verify_image_integrity(image_path: str, signed_record: dict, secret: str = "
         "timestamp": signed_record.get("timestamp", ""),
     }
     message = json.dumps(payload, sort_keys=True, separators=(",", ":"))
-    signing_key = secret or signed_record.get("station_id", "") or "rkt-default-signing-key"
+    signing_key = secret or settings.auth_secret
+    if not signing_key:
+        raise ValueError("No signing key available: configure auth_secret or provide a secret")
     expected_sig = hmac.new(
         signing_key.encode(), message.encode(), hashlib.sha256
     ).hexdigest()

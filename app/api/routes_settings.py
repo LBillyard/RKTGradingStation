@@ -2,6 +2,7 @@
 
 import logging
 import shutil
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -137,25 +138,32 @@ class CalibrationSaveRequest(BaseModel):
 # ------------------------------------------------------- Helpers
 
 
+_env_lock = threading.Lock()
+
+
 def _persist_env_value(key: str, value: Any) -> None:
-    """Write a key=value pair to the .env file (create if missing)."""
-    env_path = Path(".env")
-    lines: list[str] = []
-    found = False
+    """Write a key=value pair to the .env file (create if missing).
 
-    if env_path.exists():
-        lines = env_path.read_text(encoding="utf-8").splitlines(keepends=True)
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            if stripped.startswith(f"{key}=") or stripped.startswith(f"{key} ="):
-                lines[i] = f"{key}={value}\n"
-                found = True
-                break
+    Uses a threading lock to prevent concurrent read/write corruption.
+    """
+    with _env_lock:
+        env_path = Path(".env")
+        lines: list[str] = []
+        found = False
 
-    if not found:
-        lines.append(f"{key}={value}\n")
+        if env_path.exists():
+            lines = env_path.read_text(encoding="utf-8").splitlines(keepends=True)
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                if stripped.startswith(f"{key}=") or stripped.startswith(f"{key} ="):
+                    lines[i] = f"{key}={value}\n"
+                    found = True
+                    break
 
-    env_path.write_text("".join(lines), encoding="utf-8")
+        if not found:
+            lines.append(f"{key}={value}\n")
+
+        env_path.write_text("".join(lines), encoding="utf-8")
 
 
 def _get_settings():

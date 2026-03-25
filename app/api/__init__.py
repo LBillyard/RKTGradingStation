@@ -1,9 +1,10 @@
 """FastAPI application factory."""
 
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -28,6 +29,128 @@ def _persist_env_var(key: str, value: str) -> None:
     env_path.write_text("\n".join(lines) + "\n")
 
 
+def _create_lifespan(app_settings):
+    """Create the lifespan context manager with access to settings."""
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        # ===================== STARTUP =====================
+        import os
+        import secrets
+        from app.core.logging_config import setup_logging
+
+        setup_logging(app_settings.log_level, Path(app_settings.data_dir))
+        logger.info("Starting RKT Grading Station v1.0.0")
+
+        # Agent mode: skip database init, operator seeding, and webhook subscriptions
+        if app_settings.mode == "agent":
+            logger.info("Agent mode — skipping desktop/cloud initialization")
+            yield
+            return
+
+        from app.db.database import init_db
+
+        # --- Auto-generate auth secret if using default ---
+        if app_settings.auth_secret == "rkt-default-secret-change-me":
+            new_secret = secrets.token_hex(32)
+            app_settings.auth_secret = new_secret
+            _persist_env_var("RKT_AUTH_SECRET", new_secret)
+            logger.warning(
+                "Auth secret was default — auto-generated and saved to .env. "
+                "Existing tokens are now invalid."
+            )
+
+        # --- Startup validation warnings ---
+        if app_settings.env == "development":
+            logger.info("Running in DEVELOPMENT mode (debug=%s)", app_settings.debug)
+        if not os.path.exists(".env"):
+            logger.warning("No .env file found — using default configuration")
+
+        init_db(app_settings.db.url, echo=app_settings.db.echo)
+        logger.info("Database initialized")
+
+        # --- Migrate pin_hash -> password_hash if needed ---
+        from app.db.database import get_session
+        from app.models.operator import Operator
+        _seed_db = get_session()
+        try:
+            from sqlalchemy import text, inspect as sa_inspect
+            _engine = _seed_db.get_bind()
+            inspector = sa_inspect(_engine)
+            columns = [c['name'] for c in inspector.get_columns('operators')]
+            if 'pin_hash' in columns and 'password_hash' not in columns:
+                _seed_db.execute(text('ALTER TABLE operators RENAME COLUMN pin_hash TO password_hash'))
+                _seed_db.commit()
+                logger.info("Migrated operators.pin_hash -> password_hash")
+
+            # --- Seed default admin (only if NO operators exist) ---
+            any_operator = _seed_db.query(Operator).first()
+            if not any_operator:
+                import bcrypt
+                default_pw = os.environ.get("RKT_DEFAULT_ADMIN_PASSWORD", "ChangeMe123!")
+                pw_hash = bcrypt.hashpw(default_pw.encode(), bcrypt.gensalt()).decode()
+                admin = Operator(
+                    name="admin",
+                    password_hash=pw_hash,
+                    role="admin",
+                    # TODO(H2): Operator model needs a `must_change_password` Boolean column.
+                    # Once added, set must_change_password=True here so the frontend
+                    # forces a password change on first login with the default credentials.
+                )
+                _seed_db.add(admin)
+                _seed_db.commit()
+                logger.warning("Default admin created — change the password immediately via Admin panel")
+        finally:
+            _seed_db.close()
+
+        # Subscribe webhooks to the event bus
+        from app.core.events import event_bus, Events
+        from app.services.webhook import fire_webhook_background
+
+        event_bus.subscribe(Events.GRADE_APPROVED, lambda d: fire_webhook_background("grade.approved", d))
+        event_bus.subscribe(Events.GRADE_OVERRIDDEN, lambda d: fire_webhook_background("grade.overridden", d))
+        event_bus.subscribe(Events.AUTH_FLAGGED, lambda d: fire_webhook_background("auth.flagged", d))
+        logger.info("Webhook event subscriptions registered")
+
+        # Auto-link AI grades to training data
+        def _on_grade_calculated(data):
+            if not data or "card_record_id" not in data:
+                return
+            try:
+                from app.services.training.service import link_ai_grade
+                _link_db = get_session()
+                try:
+                    link_ai_grade(data["card_record_id"], _link_db)
+                finally:
+                    _link_db.close()
+            except Exception as e:
+                logger.debug(f"Training link skipped: {e}")
+
+        event_bus.subscribe(Events.GRADE_CALCULATED, _on_grade_calculated)
+
+        yield  # =============== APP IS RUNNING ===============
+
+        # ===================== SHUTDOWN =====================
+        logger.info("Shutting down RKT Grading Station...")
+
+        # Close database connections
+        from app.db.database import _engine as db_engine
+        if db_engine is not None:
+            db_engine.dispose()
+            logger.info("Database connections closed")
+
+        # Clean temp files
+        import shutil
+        temp_dir = Path(app_settings.data_dir) / "temp"
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            logger.info("Temp directory cleaned up")
+
+        logger.info("Shutdown complete")
+
+    return lifespan
+
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     from app.config import settings
@@ -37,6 +160,7 @@ def create_app() -> FastAPI:
         version="1.0.0",
         docs_url="/api/docs" if settings.debug else None,
         redoc_url=None,
+        lifespan=_create_lifespan(settings),
     )
 
     # CORS — mode-aware origins
@@ -56,11 +180,12 @@ def create_app() -> FastAPI:
             "http://127.0.0.1:8741",
         ]
 
+    # M3: Restrict CORS methods and headers to explicit allow-lists
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
     )
 
     # Security middleware — auth enforcement + error sanitization
@@ -72,12 +197,22 @@ def create_app() -> FastAPI:
     if static_dir.exists():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-    # Mount data directories for serving images (local/desktop only)
+    # H4: Authenticated endpoint for data files instead of unauthenticated StaticFiles mount
     from app.config import settings as app_settings
     if settings.mode != "agent":
-        data_dir = Path(app_settings.data_dir)
-        if data_dir.exists():
-            app.mount("/data", StaticFiles(directory=str(data_dir)), name="data")
+        _data_dir = Path(app_settings.data_dir).resolve()
+
+        @app.get("/data/{file_path:path}")
+        async def serve_data_file(file_path: str):
+            """Serve files from the data directory with auth (enforced by SecurityMiddleware)
+            and path traversal protection."""
+            # Resolve the requested path and ensure it stays within data_dir
+            requested = (_data_dir / file_path).resolve()
+            if not str(requested).startswith(str(_data_dir)):
+                raise HTTPException(status_code=403, detail="Access denied")
+            if not requested.is_file():
+                raise HTTPException(status_code=404, detail="File not found")
+            return FileResponse(str(requested))
 
     # Register API routers based on mode
     # Cloud + Desktop: all analysis/data/UI routes
@@ -198,90 +333,5 @@ def create_app() -> FastAPI:
         if path.startswith(("api/", "static/", "data/")):
             return JSONResponse({"detail": "Not found"}, status_code=404)
         return FileResponse(str(UI_DIR / "index.html"))
-
-    @app.on_event("startup")
-    async def startup():
-        import os
-        import secrets
-        from app.db.database import init_db
-        from app.core.logging_config import setup_logging
-
-        setup_logging(app_settings.log_level, Path(app_settings.data_dir))
-        logger.info("Starting RKT Grading Station v1.0.0")
-
-        # --- Auto-generate auth secret if using default ---
-        if app_settings.auth_secret == "rkt-default-secret-change-me":
-            new_secret = secrets.token_hex(32)
-            app_settings.auth_secret = new_secret
-            _persist_env_var("RKT_AUTH_SECRET", new_secret)
-            logger.warning(
-                "Auth secret was default — auto-generated and saved to .env. "
-                "Existing tokens are now invalid."
-            )
-
-        # --- Startup validation warnings ---
-        if app_settings.env == "development":
-            logger.info("Running in DEVELOPMENT mode (debug=%s)", app_settings.debug)
-        if not os.path.exists(".env"):
-            logger.warning("No .env file found — using default configuration")
-
-        init_db(app_settings.db.url, echo=app_settings.db.echo)
-        logger.info("Database initialized")
-
-        # --- Migrate pin_hash -> password_hash if needed ---
-        from app.db.database import get_session
-        from app.models.operator import Operator
-        _seed_db = get_session()
-        try:
-            from sqlalchemy import text, inspect as sa_inspect
-            _engine = _seed_db.get_bind()
-            inspector = sa_inspect(_engine)
-            columns = [c['name'] for c in inspector.get_columns('operators')]
-            if 'pin_hash' in columns and 'password_hash' not in columns:
-                _seed_db.execute(text('ALTER TABLE operators RENAME COLUMN pin_hash TO password_hash'))
-                _seed_db.commit()
-                logger.info("Migrated operators.pin_hash -> password_hash")
-
-            # --- Seed default admin (only if NO operators exist) ---
-            any_operator = _seed_db.query(Operator).first()
-            if not any_operator:
-                import bcrypt
-                default_pw = os.environ.get("RKT_DEFAULT_ADMIN_PASSWORD", "ChangeMe123!")
-                pw_hash = bcrypt.hashpw(default_pw.encode(), bcrypt.gensalt()).decode()
-                admin = Operator(
-                    name="admin",
-                    password_hash=pw_hash,
-                    role="admin",
-                )
-                _seed_db.add(admin)
-                _seed_db.commit()
-                logger.warning("Default admin created — change the password immediately via Admin panel")
-        finally:
-            _seed_db.close()
-
-        # Subscribe webhooks to the event bus
-        from app.core.events import event_bus, Events
-        from app.services.webhook import fire_webhook_background
-
-        event_bus.subscribe(Events.GRADE_APPROVED, lambda d: fire_webhook_background("grade.approved", d))
-        event_bus.subscribe(Events.GRADE_OVERRIDDEN, lambda d: fire_webhook_background("grade.overridden", d))
-        event_bus.subscribe(Events.AUTH_FLAGGED, lambda d: fire_webhook_background("auth.flagged", d))
-        logger.info("Webhook event subscriptions registered")
-
-        # Auto-link AI grades to training data
-        def _on_grade_calculated(data):
-            if not data or "card_record_id" not in data:
-                return
-            try:
-                from app.services.training.service import link_ai_grade
-                _link_db = get_session()
-                try:
-                    link_ai_grade(data["card_record_id"], _link_db)
-                finally:
-                    _link_db.close()
-            except Exception as e:
-                logger.debug(f"Training link skipped: {e}")
-
-        event_bus.subscribe(Events.GRADE_CALCULATED, _on_grade_calculated)
 
     return app

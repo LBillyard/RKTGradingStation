@@ -2,8 +2,8 @@
 
 from typing import Optional
 
-from sqlalchemy import String, Integer, Float, Text, ForeignKey, JSON
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import String, Integer, Float, Text, ForeignKey, JSON, Index
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base, uuid_pk, created_at_col
 
@@ -11,6 +11,10 @@ from app.db.database import Base, uuid_pk, created_at_col
 class OCRResult(Base):
     """Result of OCR processing on a card image."""
     __tablename__ = "ocr_results"
+    __table_args__ = (
+        Index("idx_ocr_results_card_image_id", "card_image_id"),
+        Index("idx_ocr_results_card_record_id", "card_record_id"),
+    )
 
     id: Mapped[uuid_pk]
     card_image_id: Mapped[str] = mapped_column(String(36), ForeignKey("card_images.id"))
@@ -25,3 +29,5 @@ class OCRResult(Base):
     processing_time_ms: Mapped[Optional[int]] = mapped_column(Integer)
     error_message: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[created_at_col]
+
+    card_record: Mapped[Optional["CardRecord"]] = relationship(back_populates="ocr_results")

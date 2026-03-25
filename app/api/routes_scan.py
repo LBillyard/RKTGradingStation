@@ -228,6 +228,7 @@ async def scan_to_slab_pipeline(
             "status": "ok",
             "contour_found": processed.contour_found,
             "perspective_corrected": processed.perspective_corrected,
+            "orientation_rotated": processed.orientation_rotated,
             "processing_time_ms": processed.processing_time_ms,
             "errors": processed.errors,
         })
@@ -557,6 +558,7 @@ async def batch_scan(session_id: str, dpi: int = 600, db: Session = Depends(get_
             "status": "ok" if processed.contour_found else "partial",
             "contour_found": processed.contour_found,
             "perspective_corrected": processed.perspective_corrected,
+            "orientation_rotated": processed.orientation_rotated,
             "errors": processed.errors,
         })
 
@@ -724,6 +726,9 @@ async def batch_scan(session_id: str, dpi: int = 600, db: Session = Depends(get_
 @router.post("/{session_id}/acquire")
 async def acquire_scan(session_id: str, side: str = "front", dpi: int = 600, db: Session = Depends(get_db)):
     """Acquire an image from the scanner hardware."""
+    if side not in ALLOWED_SIDES:
+        raise HTTPException(status_code=400, detail=f"Invalid side '{side}'. Must be one of: {', '.join(sorted(ALLOWED_SIDES))}")
+
     from app.models.scan import ScanSession, CardImage
     from app.config import settings
 
@@ -783,6 +788,7 @@ async def acquire_scan(session_id: str, side: str = "front", dpi: int = 600, db:
     }
 
 
+ALLOWED_SIDES = {"front", "back"}
 ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp"}
 MAX_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024  # 100 MB
 
@@ -790,6 +796,9 @@ MAX_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024  # 100 MB
 @router.post("/{session_id}/upload")
 async def upload_scan_image(session_id: str, side: str = "front", file: UploadFile = File(...), db: Session = Depends(get_db)):
     """Upload a card image for a scan session."""
+    if side not in ALLOWED_SIDES:
+        raise HTTPException(status_code=400, detail=f"Invalid side '{side}'. Must be one of: {', '.join(sorted(ALLOWED_SIDES))}")
+
     from app.models.scan import ScanSession, CardImage
     from app.config import settings
 
@@ -921,6 +930,7 @@ async def process_scan_session(session_id: str, force_multi: bool = False, db: S
             "debug_dir": processed.debug_dir,
             "contour_found": processed.contour_found,
             "perspective_corrected": processed.perspective_corrected,
+            "orientation_rotated": processed.orientation_rotated,
             "has_borders": processed.borders is not None,
             "regions_extracted": sum(1 for attr in ['corner_tl', 'corner_tr', 'corner_br', 'corner_bl',
                 'edge_top', 'edge_bottom', 'edge_left', 'edge_right', 'surface']
@@ -1272,6 +1282,7 @@ async def process_multi_scan(session_id: str, db: Session = Depends(get_db)):
             "status": "ok" if processed.contour_found else "partial",
             "contour_found": processed.contour_found,
             "perspective_corrected": processed.perspective_corrected,
+            "orientation_rotated": processed.orientation_rotated,
             "errors": processed.errors,
         })
 
@@ -1586,6 +1597,7 @@ async def rescan_card(card_id: str, dpi: int = 600, db: Session = Depends(get_db
             "status": "ok",
             "contour_found": processed.contour_found,
             "perspective_corrected": processed.perspective_corrected,
+            "orientation_rotated": processed.orientation_rotated,
             "processing_time_ms": processed.processing_time_ms,
         })
     except Exception as e:

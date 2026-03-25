@@ -12,6 +12,7 @@ import {
     createStatusBadge,
     showToast,
     formatDate,
+    escapeHtml,
 } from '../components.js';
 
 /* ------------------------------------------------------------------ state */
@@ -40,6 +41,8 @@ export async function init(container) {
     await _loadSets();
     await _loadCards();
     _startSyncPoll();
+    // Register cleanup so interval is cleared even if destroy() is not called
+    window._pageCleanup.push(() => { if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; } });
 }
 
 export function destroy() {
@@ -296,16 +299,16 @@ function _renderGrid() {
                     <div class="card-img-top bg-light d-flex align-items-center justify-content-center"
                          style="height:180px; overflow:hidden;">
                         ${thumb
-                            ? `<img src="${thumb}" alt="${card.card_name}" class="img-fluid" style="max-height:180px; object-fit:contain;">`
+                            ? `<img src="${thumb}" alt="${escapeHtml(card.card_name)}" class="img-fluid" style="max-height:180px; object-fit:contain;">`
                             : `<i class="bi bi-image text-muted fs-1"></i>`
                         }
                     </div>
                     <div class="card-body p-2">
-                        <p class="card-title mb-1 small fw-semibold text-truncate" title="${card.card_name}">
-                            ${card.card_name}
+                        <p class="card-title mb-1 small fw-semibold text-truncate" title="${escapeHtml(card.card_name)}">
+                            ${escapeHtml(card.card_name)}
                         </p>
                         <p class="mb-1 text-muted" style="font-size:0.75rem;">
-                            ${card.set_code || ''} ${card.collector_number ? '#' + card.collector_number : ''}
+                            ${escapeHtml(card.set_code || '')} ${card.collector_number ? '#' + escapeHtml(card.collector_number) : ''}
                         </p>
                         <div class="d-flex justify-content-between align-items-center">
                             ${statusBadge}
@@ -619,13 +622,13 @@ async function _openDetailModal(cardId) {
             </div>
             <table class="table table-sm table-borderless mt-2">
                 <tr><th style="width:150px;">Status</th><td>${createStatusBadge(card.status)}</td></tr>
-                <tr><th>Set</th><td>${card.set_name || ''} (${card.set_code || ''})</td></tr>
-                <tr><th>Collector #</th><td>${card.collector_number || '\u2014'}</td></tr>
-                <tr><th>Rarity</th><td>${card.rarity || '\u2014'}</td></tr>
-                <tr><th>Language</th><td>${card.language || '\u2014'}</td></tr>
-                <tr><th>Franchise</th><td>${card.franchise || '\u2014'}</td></tr>
-                <tr><th>PokeWallet ID</th><td>${card.pokewallet_card_id || '\u2014'}</td></tr>
-                <tr><th>Approved by</th><td>${card.approved_by || '\u2014'}</td></tr>
+                <tr><th>Set</th><td>${escapeHtml(card.set_name || '')} (${escapeHtml(card.set_code || '')})</td></tr>
+                <tr><th>Collector #</th><td>${escapeHtml(card.collector_number || '\u2014')}</td></tr>
+                <tr><th>Rarity</th><td>${escapeHtml(card.rarity || '\u2014')}</td></tr>
+                <tr><th>Language</th><td>${escapeHtml(card.language || '\u2014')}</td></tr>
+                <tr><th>Franchise</th><td>${escapeHtml(card.franchise || '\u2014')}</td></tr>
+                <tr><th>PokeWallet ID</th><td>${escapeHtml(card.pokewallet_card_id || '\u2014')}</td></tr>
+                <tr><th>Approved by</th><td>${escapeHtml(card.approved_by || '\u2014')}</td></tr>
                 <tr><th>Created</th><td>${formatDate(card.created_at)}</td></tr>
             </table>
         `;
@@ -646,7 +649,7 @@ async function _openDetailModal(cardId) {
             `;
         }
     } catch (err) {
-        body.innerHTML = createEmptyState(`Failed to load card: ${err.message}`, 'bi-exclamation-triangle');
+        body.innerHTML = createEmptyState('Failed to load card: ' + escapeHtml(err.message), 'bi-exclamation-triangle');
     }
 }
 
@@ -764,7 +767,7 @@ async function _runComparison() {
         }
     } catch (err) {
         if (scoresDiv) {
-            scoresDiv.innerHTML = `<div class="col-12 text-center text-danger">${err.message}</div>`;
+            scoresDiv.innerHTML = `<div class="col-12 text-center text-danger">${escapeHtml(err.message)}</div>`;
         }
     }
 }

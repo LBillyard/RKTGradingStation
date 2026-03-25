@@ -7,6 +7,20 @@
 
 /* global bootstrap */
 
+// ------------------------------------------------------------------ HTML Escaping
+/**
+ * Escape HTML special characters in a string to prevent XSS when
+ * inserting dynamic data into innerHTML.  Safe for all user-supplied
+ * or API-returned values.
+ */
+export function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    if (typeof str !== 'string') str = String(str);
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 // ------------------------------------------------------------------ Stat Card
 export function createStatCard(title, value, subtitle = '', icon = 'bi-bar-chart', color = 'primary') {
     return `
@@ -17,9 +31,9 @@ export function createStatCard(title, value, subtitle = '', icon = 'bi-bar-chart
                         <i class="bi ${icon} fs-4"></i>
                     </div>
                     <div>
-                        <div class="stat-value fw-bold fs-4">${value}</div>
-                        <div class="stat-title text-muted small">${title}</div>
-                        ${subtitle ? `<div class="stat-subtitle text-muted small">${subtitle}</div>` : ''}
+                        <div class="stat-value fw-bold fs-4">${escapeHtml(value)}</div>
+                        <div class="stat-title text-muted small">${escapeHtml(title)}</div>
+                        ${subtitle ? `<div class="stat-subtitle text-muted small">${escapeHtml(subtitle)}</div>` : ''}
                     </div>
                 </div>
             </div>
@@ -42,7 +56,7 @@ export function createGradeBadge(grade, size = 'lg') {
     const bgClass  = color === 'gold' ? 'bg-warning' : `bg-${color}`;
     const txtClass = (color === 'gold' || color === 'warning') ? 'text-dark' : 'text-white';
 
-    return `<span class="${sizeClass} ${bgClass} ${txtClass}">${grade}</span>`;
+    return `<span class="${sizeClass} ${bgClass} ${txtClass}">${escapeHtml(grade)}</span>`;
 }
 
 // ------------------------------------------------------- Authenticity Badge
@@ -74,7 +88,7 @@ export function createStatusBadge(status) {
         engraved:   'success',
     };
     const color = map[status] || 'secondary';
-    return `<span class="badge bg-${color}">${status}</span>`;
+    return `<span class="badge bg-${color}">${escapeHtml(status)}</span>`;
 }
 
 // ---------------------------------------------------------- Empty State
@@ -82,7 +96,7 @@ export function createEmptyState(message, icon = 'bi-inbox') {
     return `
         <div class="text-center py-5 text-muted">
             <i class="bi ${icon} fs-1 d-block mb-3"></i>
-            <p class="mb-0">${message}</p>
+            <p class="mb-0">${escapeHtml(message)}</p>
         </div>
     `;
 }
@@ -92,7 +106,7 @@ export function createLoadingSpinner(message = 'Loading...') {
     return `
         <div class="text-center py-5">
             <div class="spinner-border text-primary mb-3" role="status"></div>
-            <p class="text-muted">${message}</p>
+            <p class="text-muted">${escapeHtml(message)}</p>
         </div>
     `;
 }
@@ -113,7 +127,7 @@ export function showToast(message, type = 'info') {
                 <strong class="me-auto">RKT</strong>
                 <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
             </div>
-            <div class="toast-body">${message}</div>
+            <div class="toast-body">${escapeHtml(message)}</div>
         </div>
     `;
 

@@ -1,5 +1,6 @@
 """RKT Station Agent version and auto-update system."""
 
+import hashlib
 import json
 import logging
 import os
@@ -89,6 +90,23 @@ def auto_update(update_info: dict) -> bool:
                 for chunk in resp.iter_bytes(chunk_size=8192):
                     tmp.write(chunk)
             tmp_path = tmp.name
+
+        # Verify download integrity via SHA-256
+        expected_hash = update_info.get("sha256")
+        computed_hash = hashlib.sha256(Path(tmp_path).read_bytes()).hexdigest()
+        if expected_hash:
+            if computed_hash != expected_hash:
+                logger.error(
+                    "Update integrity check failed! "
+                    f"Expected {expected_hash}, got {computed_hash}"
+                )
+                os.unlink(tmp_path)
+                return False
+            logger.info("Update integrity verified (SHA-256 match)")
+        else:
+            logger.warning(
+                "No SHA-256 hash provided by server — skipping integrity check"
+            )
 
         # Replace current exe with new one
         current_exe = sys.executable

@@ -1,4 +1,4 @@
-"""Security middleware for auth enforcement and error sanitization."""
+"""Security middleware for auth enforcement, security headers, and error sanitization."""
 
 import logging
 
@@ -20,14 +20,18 @@ AUTH_EXEMPT_PATHS = frozenset({
     "/api/agent/download",
     "/api/agent/changelog",
     "/api/slab/verify",
+    "/agent/version",
+    "/agent/status",
+    "/agent/changelog",
 })
 
-# Path prefixes that never need auth (static assets, SPA shell)
-NO_AUTH_PREFIXES = ("/static/", "/data/", "/api/docs")
+# H4: /data/db/ and /data/backups/ require auth; scan images are public
+# (path traversal protection is in the serve_data_file endpoint)
+NO_AUTH_PREFIXES = ("/static/", "/api/docs", "/data/scans/", "/data/images/")
 
 
 class SecurityMiddleware(BaseHTTPMiddleware):
-    """Enforce authentication on /api/* routes and sanitize 500 errors."""
+    """Enforce authentication on /api/* routes, add security headers, and sanitize 500 errors."""
 
     def __init__(self, app, debug: bool = False):
         super().__init__(app)
@@ -36,8 +40,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         path = request.url.path
 
-        # --- Auth enforcement for API routes ---
-        if path.startswith("/api/") and not self._is_exempt(path):
+        # --- Auth enforcement for API routes and /data/ ---
+        needs_auth = path.startswith("/api/") or path.startswith("/data/") or path.startswith("/agent/")
+        if needs_auth and not self._is_exempt(path):
             auth_header = request.headers.get("authorization", "")
             if not auth_header.startswith("Bearer "):
                 return JSONResponse(
@@ -66,6 +71,16 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 {"detail": "Internal server error"},
                 status_code=500,
             )
+
+        # --- M1: Security headers on every response ---
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+        # Cache-Control: no-store for API responses only, not static files
+        if not path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-store"
 
         return response
 

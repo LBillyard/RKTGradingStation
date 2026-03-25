@@ -1,7 +1,7 @@
 """Database backup and restore routes."""
 
 import logging
-import shutil
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 
@@ -22,7 +22,11 @@ def _backup_dir() -> Path:
 
 @router.post("/create")
 async def create_backup():
-    """Create a backup of the database."""
+    """Create a backup of the database using SQLite's online backup API.
+
+    Uses VACUUM INTO which is safe for concurrent readers/writers, unlike
+    a raw file copy that can produce a corrupt backup mid-transaction.
+    """
     db_path = Path(settings.data_dir) / "db" / "rkt_grading.db"
     if not db_path.exists():
         raise HTTPException(status_code=404, detail="Database file not found")
@@ -31,7 +35,20 @@ async def create_backup():
     backup_name = f"rkt_backup_{timestamp}.db"
     backup_path = _backup_dir() / backup_name
 
-    shutil.copy2(str(db_path), str(backup_path))
+    try:
+        src = sqlite3.connect(str(db_path))
+        dst = sqlite3.connect(str(backup_path))
+        with dst:
+            src.backup(dst)
+        dst.close()
+        src.close()
+    except Exception as e:
+        # Clean up partial backup on failure
+        if backup_path.exists():
+            backup_path.unlink()
+        logger.error("Backup failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Backup failed: {e}")
+
     size = backup_path.stat().st_size
 
     logger.info("Backup created: %s (%d bytes)", backup_name, size)
@@ -39,7 +56,6 @@ async def create_backup():
         "status": "created",
         "filename": backup_name,
         "size_bytes": size,
-        "path": str(backup_path),
     }
 
 

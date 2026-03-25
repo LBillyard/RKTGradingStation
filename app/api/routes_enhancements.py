@@ -229,16 +229,30 @@ async def auto_slab_candidates(min_grade: float = 9.0, db: Session = Depends(get
 
 # ---- Bulk CSV Import ----
 
+_BULK_IMPORT_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
+_BULK_IMPORT_MAX_ROWS = 10_000
+
+
 @router.post("/bulk-import")
 async def bulk_import_cards(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """Import cards from a CSV file to pre-populate the grading queue.
 
     CSV format: card_name, set_name, rarity, expected_grade (optional)
+    Max file size: 10 MB. Max rows: 10,000. Only .csv files accepted.
     """
     from app.models.card import CardRecord
     from app.utils.crypto import generate_serial_number
 
-    content = await file.read()
+    # Validate file extension
+    filename = (file.filename or "").lower()
+    if not filename.endswith(".csv"):
+        raise HTTPException(400, "Only .csv files are accepted")
+
+    # Validate file size (read with limit)
+    content = await file.read(_BULK_IMPORT_MAX_BYTES + 1)
+    if len(content) > _BULK_IMPORT_MAX_BYTES:
+        raise HTTPException(400, f"File too large. Maximum size is {_BULK_IMPORT_MAX_BYTES // (1024 * 1024)} MB")
+
     text = content.decode("utf-8")
     reader = csv.DictReader(io.StringIO(text))
 
@@ -246,6 +260,10 @@ async def bulk_import_cards(file: UploadFile = File(...), db: Session = Depends(
     errors = []
 
     for i, row in enumerate(reader, start=2):
+        if i - 1 > _BULK_IMPORT_MAX_ROWS:
+            errors.append(f"Row {i}: max row limit ({_BULK_IMPORT_MAX_ROWS}) exceeded, remaining rows skipped")
+            break
+
         try:
             card_name = row.get("card_name", "").strip()
             set_name = row.get("set_name", "").strip()

@@ -9,8 +9,8 @@ The AI must follow these standards precisely when evaluating cards.
 
 | Grade | Name | Description |
 |-------|------|-------------|
-| 10 | Gem Mint | Flawless card. No visible defects under 10x magnification. Perfect centering (50/50 or within 55/45). |
-| 9.5 | Mint+ | Near-perfect. One extremely minor imperfection barely visible to the naked eye. |
+| 10 | Gem Mint | Flawless card to the naked eye. No physical defects visible in the scan. Perfect centering (50/50 or within 55/45). All 4 corners razor sharp with zero whitening. Edges clean with no nicks. Surface pristine with no scratches or wear. A 10 is achievable but should be reserved for truly flawless cards. |
+| 9.5 | Mint+ | Near-perfect. One extremely minor imperfection (e.g. factory print dot, very slight corner softness) barely visible to the naked eye. |
 | 9 | Mint | Minor imperfection. Slight whitening on one corner, minimal edge wear. Centering within 55/45. |
 | 8.5 | NM-Mint+ | A few minor imperfections. Slight whitening on 2 corners or minor edge softening. |
 | 8 | NM-Mint | Noticeable minor wear. Corner whitening on 2-3 corners, light edge wear. Centering within 60/40. |
@@ -94,23 +94,46 @@ The AI must follow these standards precisely when evaluating cards.
 
 ---
 
+## Scanner Resolution & Artifacts
+
+You are grading from a 600 DPI flatbed scanner image, NOT a microscope or loupe. At this resolution:
+- **Minor pixel noise, compression artifacts, and scan banding are NOT defects** — ignore them entirely
+- **Holo refraction patterns** appear as colour shifts or apparent "scratches" — these are NOT physical damage
+- **Factory card texture** (modern linen texture, etched holo) appears as a pattern in the scan — this is NOT surface damage
+- **Dust specks on the scanner bed** may appear as tiny dark spots — do not count these as card defects
+- A card that looks clean and sharp in a 600 DPI scan IS clean and sharp — do not imagine defects that aren't clearly visible
+- **If you cannot clearly identify a specific physical defect, it is not a defect.** Do not penalise for vague impressions.
+- **Zoom into corners carefully** — corner whitening is the most common defect and the easiest to miss in a scan. Even minor white fibres showing = 9.0 corners max.
+- **Check surface under different contrast** — surface scratches can be subtle in scans but still affect the grade significantly. Any visible wear = 9.0 surface max.
+
 ## Grading Philosophy
 
 RKT grading aims to be **fair but commercially viable**. We want to:
 1. Grade accurately — the grade should reflect the card's true condition
-2. Avoid being unnecessarily harsh — borderline calls should lean toward the higher grade
+2. **Avoid being unnecessarily harsh** — borderline calls should lean toward the higher grade
 3. Be consistent — the same card should get the same grade every time
 4. Prioritise what collectors care about — surface scratches on the artwork matter more than minor edge wear on the back
+5. **Grade what you actually see** — if corners show whitening, score them accordingly even if the rest looks good
 
 When in doubt between two grades, round UP to the next 0.5 increment if:
 - The card has only minor defects
 - The defects are on the back, not the front
 - The card is vintage (pre-2003)
 - Confidence in the defect detection is below 70%
+- The "defect" could be a scanner artifact or holo refraction
 
 ---
 
 ## Learned Calibrations
 
-_This section is automatically updated by the training system as expert grades are submitted._
-_No calibration data yet — submit expert grades via Training Mode to build this section._
+_Last updated: 2026-03-25 15:07 UTC (6 training samples)_
+
+- **Corners**: AI under-grades by 0.5 on average (based on 6 samples). Loosen corners thresholds.
+- **Edges**: AI under-grades by 0.3 on average (based on 6 samples). Loosen edges thresholds.
+- **Surface**: AI under-grades by 0.3 on average (based on 6 samples). Loosen surface thresholds.
+- **Final**: AI under-grades by 0.5 on average (based on 6 samples). Loosen final thresholds.
+
+### Summary
+- Total training samples: 6
+- Average final grade delta (AI - Expert): -0.50
+- Match rate (within 0.5): 67%

@@ -6,7 +6,7 @@
  */
 import { api, agent, isCloudMode } from '../api.js';
 import { ImageViewer } from '../image-viewer.js';
-import { createGradeBadge, createAuthBadge, createStatusBadge, showToast } from '../components.js';
+import { createGradeBadge, createAuthBadge, createStatusBadge, showToast, escapeHtml } from '../components.js';
 
 let viewer = null;
 let state = {
@@ -513,9 +513,9 @@ function getStepSummary(step) {
         case 'vision_pipeline':
             return `${step.regions_extracted || 0} regions extracted, ${step.processing_time_ms || 0}ms`;
         case 'ocr':
-            return step.text_length > 0 ? `${step.text_length} chars, engine: ${step.engine}` : `No text detected (${step.engine})`;
+            return step.text_length > 0 ? `${step.text_length} chars, engine: ${escapeHtml(step.engine)}` : `No text detected (${escapeHtml(step.engine)})`;
         case 'card_identification':
-            return step.card_name ? `${step.card_name} (${((step.confidence || 0) * 100).toFixed(0)}%)` : 'Created as unknown, needs manual review';
+            return step.card_name ? `${escapeHtml(step.card_name)} (${((step.confidence || 0) * 100).toFixed(0)}%)` : 'Created as unknown, needs manual review';
         case 'grading':
             return step.final_grade ? `Grade: ${step.final_grade}, ${step.defect_count} defects` : 'Grading complete';
         case 'ai_review':
@@ -627,11 +627,11 @@ function renderReportPhase(container) {
                         <div class="card-header"><h6 class="mb-0"><i class="bi bi-credit-card me-2"></i>Card Identity</h6></div>
                         <div class="card-body">
                             <table class="table table-sm table-borderless mb-0">
-                                <tr><td class="text-muted" style="width:40%">Name</td><td class="fw-semibold">${cardId.card_name || 'Unknown'}</td></tr>
-                                <tr><td class="text-muted">Set</td><td>${cardId.set_name || '\u2014'}</td></tr>
+                                <tr><td class="text-muted" style="width:40%">Name</td><td class="fw-semibold">${escapeHtml(cardId.card_name || 'Unknown')}</td></tr>
+                                <tr><td class="text-muted">Set</td><td>${escapeHtml(cardId.set_name || '\u2014')}</td></tr>
                                 <tr><td class="text-muted">Confidence</td><td>${((cardId.confidence || 0) * 100).toFixed(0)}%</td></tr>
-                                <tr><td class="text-muted">Serial</td><td><code>${cardId.serial || '\u2014'}</code></td></tr>
-                                <tr><td class="text-muted">Card ID</td><td><code class="small">${res.card_id || '\u2014'}</code></td></tr>
+                                <tr><td class="text-muted">Serial</td><td><code>${escapeHtml(cardId.serial || '\u2014')}</code></td></tr>
+                                <tr><td class="text-muted">Card ID</td><td><code class="small">${escapeHtml(res.card_id || '\u2014')}</code></td></tr>
                             </table>
                         </div>
                     </div>
@@ -654,9 +654,9 @@ function renderReportPhase(container) {
                                 <span class="fw-semibold">${aiReview.agrees_with_grade ? '<i class="bi bi-check-circle text-success me-1"></i>Agrees with grade' : '<i class="bi bi-exclamation-circle text-warning me-1"></i>Suggests adjustment'}</span>
                                 ${aiReview.suggested_grade ? `<span class="badge bg-warning text-dark">Suggested: ${aiReview.suggested_grade}</span>` : ''}
                             </div>
-                            <p class="small text-muted mb-2">${aiReview.overall_assessment || ''}</p>
-                            ${aiReview.missed_defects?.length ? `<div class="small"><strong>Possible missed defects:</strong> ${aiReview.missed_defects.join(', ')}</div>` : ''}
-                            ${aiReview.over_penalised?.length ? `<div class="small"><strong>Possibly over-penalised:</strong> ${aiReview.over_penalised.join(', ')}</div>` : ''}
+                            <p class="small text-muted mb-2">${escapeHtml(aiReview.overall_assessment || '')}</p>
+                            ${aiReview.missed_defects?.length ? `<div class="small"><strong>Possible missed defects:</strong> ${escapeHtml(aiReview.missed_defects.join(', '))}</div>` : ''}
+                            ${aiReview.over_penalised?.length ? `<div class="small"><strong>Possibly over-penalised:</strong> ${escapeHtml(aiReview.over_penalised.join(', '))}</div>` : ''}
                             <div class="mt-1"><small class="text-muted">Confidence: ${((aiReview.confidence || 0) * 100).toFixed(0)}%</small></div>
                         </div>
                     </div>
@@ -852,7 +852,7 @@ function renderMultiReport(container) {
                     const grade = gradeStep?.final_grade || 0;
                     return `
                         <button class="btn ${i === 0 ? 'btn-primary' : 'btn-outline-secondary'} multi-card-btn" data-index="${i}">
-                            <div class="fw-semibold small">${c.card_name || 'Card ' + (i + 1)}</div>
+                            <div class="fw-semibold small">${escapeHtml(c.card_name || 'Card ' + (i + 1))}</div>
                             <div>${idFailed ? '<span class="badge bg-danger">ID Failed</span>' : createGradeBadge(grade, 'sm')}</div>
                         </button>
                     `;
@@ -897,7 +897,7 @@ function renderMultiCardDetail(card, index) {
         <div class="row">
             <div class="col-lg-6 mb-3">
                 <div class="card">
-                    <div class="card-header"><h6 class="mb-0">Card ${index + 1}: ${card.card_name || 'Unknown'}</h6></div>
+                    <div class="card-header"><h6 class="mb-0">Card ${index + 1}: ${escapeHtml(card.card_name || 'Unknown')}</h6></div>
                     <div class="card-body">
                         <div class="text-center mb-3">
                             <div style="font-size:3rem;font-weight:800;" class="${gradeColor(grade)}">${grade.toFixed(1)}</div>

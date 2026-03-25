@@ -109,7 +109,7 @@ def _run_server(settings) -> None:
     app = create_app()
     uvicorn.run(
         app,
-        host="0.0.0.0",
+        host="127.0.0.1",
         port=8742,
         log_level="info",
         access_log=False,
@@ -216,12 +216,16 @@ def _show_notification(title: str, message: str) -> None:
         # Fallback: use powershell toast
         try:
             import subprocess
+            # Sanitize inputs to prevent PowerShell injection
+            _dangerous_chars = '"`$)()'
+            safe_title = "".join(c for c in title if c not in _dangerous_chars)
+            safe_message = "".join(c for c in message if c not in _dangerous_chars)
             ps_cmd = f'''
             [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
             $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
             $textNodes = $template.GetElementsByTagName("text")
-            $textNodes.Item(0).AppendChild($template.CreateTextNode("{title}")) | Out-Null
-            $textNodes.Item(1).AppendChild($template.CreateTextNode("{message}")) | Out-Null
+            $textNodes.Item(0).AppendChild($template.CreateTextNode("{safe_title}")) | Out-Null
+            $textNodes.Item(1).AppendChild($template.CreateTextNode("{safe_message}")) | Out-Null
             $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
             [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("RKT Station Agent").Show($toast)
             '''

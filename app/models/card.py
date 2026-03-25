@@ -1,7 +1,7 @@
 """Card record and identity result models."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from sqlalchemy import String, Integer, Float, Text, DateTime, ForeignKey, JSON, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -40,10 +40,58 @@ class CardRecord(Base):
     created_at: Mapped[created_at_col]
     updated_at: Mapped[updated_at_col]
 
+    # Child relationships with cascade delete-orphan
+    identity_results: Mapped[List["CardIdentityResult"]] = relationship(
+        back_populates="card_record", cascade="all, delete-orphan"
+    )
+    grade_decisions: Mapped[List["GradeDecision"]] = relationship(
+        back_populates="card_record", cascade="all, delete-orphan",
+        foreign_keys="GradeDecision.card_record_id",
+    )
+    defect_findings: Mapped[List["DefectFinding"]] = relationship(
+        back_populates="card_record", cascade="all, delete-orphan",
+        foreign_keys="DefectFinding.card_record_id",
+    )
+    grade_history: Mapped[List["GradeHistory"]] = relationship(
+        back_populates="card_record", cascade="all, delete-orphan",
+        foreign_keys="GradeHistory.card_record_id",
+    )
+    authenticity_checks: Mapped[List["AuthenticityCheck"]] = relationship(
+        back_populates="card_record", cascade="all, delete-orphan",
+        foreign_keys="AuthenticityCheck.card_record_id",
+    )
+    authenticity_decisions: Mapped[List["AuthenticityDecision"]] = relationship(
+        back_populates="card_record", cascade="all, delete-orphan",
+        foreign_keys="AuthenticityDecision.card_record_id",
+    )
+    ocr_results: Mapped[List["OCRResult"]] = relationship(
+        back_populates="card_record", cascade="all, delete-orphan",
+        foreign_keys="OCRResult.card_record_id",
+    )
+    print_jobs: Mapped[List["PrintJob"]] = relationship(
+        back_populates="card_record", cascade="all, delete-orphan",
+        foreign_keys="PrintJob.card_record_id",
+    )
+    nfc_tags: Mapped[List["NfcTag"]] = relationship(
+        back_populates="card_record", cascade="all, delete-orphan",
+        foreign_keys="NfcTag.card_record_id",
+    )
+    slab_assemblies: Mapped[List["SlabAssembly"]] = relationship(
+        back_populates="card_record", cascade="all, delete-orphan",
+        foreign_keys="SlabAssembly.card_record_id",
+    )
+    training_grades: Mapped[List["TrainingGrade"]] = relationship(
+        back_populates="card_record", cascade="all, delete-orphan",
+        foreign_keys="TrainingGrade.card_record_id",
+    )
+
 
 class CardIdentityResult(Base):
     """Detailed result of card identification attempt."""
     __tablename__ = "card_identity_results"
+    __table_args__ = (
+        Index("idx_card_identity_results_card_record_id", "card_record_id"),
+    )
 
     id: Mapped[uuid_pk]
     card_record_id: Mapped[str] = mapped_column(String(36), ForeignKey("card_records.id"))
@@ -57,3 +105,5 @@ class CardIdentityResult(Base):
     reviewed_by: Mapped[Optional[str]] = mapped_column(String(100))
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[created_at_col]
+
+    card_record: Mapped["CardRecord"] = relationship(back_populates="identity_results")

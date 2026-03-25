@@ -12,6 +12,7 @@ import {
     createAuthBadge,
     createLoadingSpinner,
     showToast,
+    escapeHtml,
 } from '../components.js';
 import { ImageViewer } from '../image-viewer.js';
 
@@ -245,6 +246,13 @@ function buildLayout() {
                                 </div>
                                 <div id="grade-name-label" class="grade-name-label mb-2"></div>
                                 <div class="text-muted small" id="grade-summary-text">No card selected for review</div>
+                            </div>
+                            <div id="grade-method-section" class="mt-3 pt-2 border-top" style="display:none;">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <span id="grade-method-badge"></span>
+                                    <span id="grade-model-label" class="text-muted small"></span>
+                                </div>
+                                <div id="grade-explanation-text" class="small text-muted fst-italic" style="display:none;"></div>
                             </div>
                         </div>
                     </div>
@@ -649,7 +657,7 @@ async function loadProfiles() {
         const select = document.getElementById('grade-profile-select');
         if (select && data.profiles) {
             select.innerHTML = data.profiles.map(p =>
-                `<option value="${p.name}">${p.label}</option>`
+                `<option value="${escapeHtml(p.name)}">${escapeHtml(p.label)}</option>`
             ).join('');
         }
     } catch {
@@ -686,9 +694,34 @@ function renderGradeData(data) {
             parts.push(`<span class="text-warning fw-bold">Override: ${data.override_grade.toFixed(1)}</span>`);
         }
         if (data.sensitivity_profile) {
-            parts.push(`<span class="badge bg-light text-dark border">${data.sensitivity_profile}</span>`);
+            parts.push(`<span class="badge bg-light text-dark border">${escapeHtml(data.sensitivity_profile)}</span>`);
         }
         summaryEl.innerHTML = parts.join(' <span class="text-muted mx-1">|</span> ') || 'Graded';
+    }
+
+    // Grading method + AI explanation
+    const methodSection = document.getElementById('grade-method-section');
+    if (methodSection) {
+        const method = data.grading_method || 'opencv';
+        const isAI = method === 'ai_vision';
+        methodSection.style.display = '';
+        const methodBadge = document.getElementById('grade-method-badge');
+        if (methodBadge) {
+            methodBadge.innerHTML = isAI
+                ? '<span class="badge bg-purple text-white"><i class="bi bi-stars me-1"></i>AI Vision</span>'
+                : '<span class="badge bg-secondary"><i class="bi bi-cpu me-1"></i>OpenCV</span>';
+        }
+        const modelLabel = document.getElementById('grade-model-label');
+        if (modelLabel) {
+            modelLabel.textContent = data.ai_model ? data.ai_model.split('/').pop() : '';
+        }
+        const explEl = document.getElementById('grade-explanation-text');
+        if (explEl && data.grade_explanation) {
+            explEl.style.display = '';
+            explEl.textContent = data.grade_explanation;
+        } else if (explEl) {
+            explEl.style.display = 'none';
+        }
     }
 
     // Authenticity status
@@ -743,23 +776,23 @@ function renderCardInfo(data) {
 
     const badges = [];
     if (data.set_name) {
-        badges.push(`<span class="badge bg-primary-subtle text-primary-emphasis"><i class="bi bi-collection me-1"></i>${data.set_name}${data.set_code ? ' (' + data.set_code + ')' : ''}</span>`);
+        badges.push(`<span class="badge bg-primary-subtle text-primary-emphasis"><i class="bi bi-collection me-1"></i>${escapeHtml(data.set_name)}${data.set_code ? ' (' + escapeHtml(data.set_code) + ')' : ''}</span>`);
     }
     if (data.collector_number) {
-        badges.push(`<span class="badge bg-secondary-subtle text-secondary-emphasis">#${data.collector_number}</span>`);
+        badges.push(`<span class="badge bg-secondary-subtle text-secondary-emphasis">#${escapeHtml(data.collector_number)}</span>`);
     }
     if (data.rarity) {
-        badges.push(`<span class="badge bg-warning-subtle text-warning-emphasis"><i class="bi bi-star me-1"></i>${data.rarity}</span>`);
+        badges.push(`<span class="badge bg-warning-subtle text-warning-emphasis"><i class="bi bi-star me-1"></i>${escapeHtml(data.rarity)}</span>`);
     }
     if (data.language) {
         const langLabel = LANGUAGE_LABELS[data.language] || data.language.toUpperCase();
-        badges.push(`<span class="badge bg-info-subtle text-info-emphasis"><i class="bi bi-translate me-1"></i>${langLabel}</span>`);
+        badges.push(`<span class="badge bg-info-subtle text-info-emphasis"><i class="bi bi-translate me-1"></i>${escapeHtml(langLabel)}</span>`);
     }
     if (data.card_type) {
-        badges.push(`<span class="badge bg-light text-dark border">${data.card_type}</span>`);
+        badges.push(`<span class="badge bg-light text-dark border">${escapeHtml(data.card_type)}</span>`);
     }
     if (data.serial_number) {
-        badges.push(`<span class="badge bg-dark-subtle text-dark-emphasis"><i class="bi bi-upc-scan me-1"></i>${data.serial_number}</span>`);
+        badges.push(`<span class="badge bg-dark-subtle text-dark-emphasis"><i class="bi bi-upc-scan me-1"></i>${escapeHtml(data.serial_number)}</span>`);
     }
     metaEl.innerHTML = badges.join('');
 }
@@ -1153,7 +1186,7 @@ async function loadGradeHistory(cardId) {
             return `<div class="list-group-item d-flex justify-content-between align-items-center py-1 px-3">
                 <small class="text-muted">${date}</small>
                 <span class="fw-semibold">${h.final_grade?.toFixed(1) || '--'}</span>
-                <small class="text-muted">${h.sensitivity_profile || ''}</small>
+                <small class="text-muted">${escapeHtml(h.sensitivity_profile || '')}</small>
             </div>`;
         }).join('');
     } catch {
@@ -1179,9 +1212,9 @@ function renderAIReview(aiReview) {
                 : '<i class="bi bi-exclamation-circle text-warning me-1"></i>Suggests adjustment'}</span>
             ${aiReview.suggested_grade ? `<span class="badge bg-warning text-dark">Suggested: ${aiReview.suggested_grade}</span>` : ''}
         </div>
-        <p class="small text-muted mb-2">${aiReview.overall_assessment || ''}</p>
-        ${aiReview.missed_defects?.length ? `<div class="small"><strong>Possible missed:</strong> ${aiReview.missed_defects.join(', ')}</div>` : ''}
-        ${aiReview.over_penalised?.length ? `<div class="small"><strong>Over-penalised:</strong> ${aiReview.over_penalised.join(', ')}</div>` : ''}
+        <p class="small text-muted mb-2">${escapeHtml(aiReview.overall_assessment || '')}</p>
+        ${aiReview.missed_defects?.length ? `<div class="small"><strong>Possible missed:</strong> ${escapeHtml(aiReview.missed_defects.join(', '))}</div>` : ''}
+        ${aiReview.over_penalised?.length ? `<div class="small"><strong>Over-penalised:</strong> ${escapeHtml(aiReview.over_penalised.join(', '))}</div>` : ''}
         <div class="mt-1"><small class="text-muted">Confidence: ${((aiReview.confidence || 0) * 100).toFixed(0)}%</small></div>
     `;
 }
@@ -1281,8 +1314,8 @@ function renderDefectList(defects) {
                     ${d.severity}
                 </span>
                 <div class="flex-grow-1">
-                    <div class="fw-semibold small">${d.defect_type}</div>
-                    <div class="text-muted" style="font-size:0.7rem;">${d.location || d.category}</div>
+                    <div class="fw-semibold small">${escapeHtml(d.defect_type)}</div>
+                    <div class="text-muted" style="font-size:0.7rem;">${escapeHtml(d.location || d.category)}</div>
                 </div>
                 <div class="text-end">
                     <div class="small text-danger">-${d.score_impact?.toFixed(1) || '?'}</div>

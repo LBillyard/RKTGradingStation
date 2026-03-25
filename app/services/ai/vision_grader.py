@@ -5,6 +5,7 @@ defect detection that understands what cards look like and can distinguish
 real defects from printed artwork.
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -17,6 +18,10 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 BRAIN_PATH = Path("data/grading_brain.md")
+
+# P8: Cache the system prompt to avoid rebuilding on every call
+_cached_system_prompt: Optional[str] = None
+_cached_brain_hash: Optional[str] = None
 
 
 @dataclass
@@ -61,6 +66,30 @@ def _load_grading_brain() -> str:
     return "Grade cards on a 1-10 scale. 10=Gem Mint, 9=Mint, 8=NM-Mint, 7=Near Mint, 6=EX-NM, 5=Excellent."
 
 
+def _get_system_prompt() -> str:
+    """Return the system prompt, rebuilding only when the brain file changes."""
+    global _cached_system_prompt, _cached_brain_hash
+
+    brain = _load_grading_brain()
+    brain_hash = hashlib.md5(brain.encode()).hexdigest()
+
+    if _cached_system_prompt is not None and brain_hash == _cached_brain_hash:
+        return _cached_system_prompt
+
+    _cached_brain_hash = brain_hash
+    _cached_system_prompt = f"""You are an expert trading card grader for RKT Grading.
+You evaluate card condition by examining scanned images.
+
+Follow these grading standards precisely:
+
+{brain}
+
+Always respond with valid JSON matching the requested format."""
+
+    logger.debug("Rebuilt AI grading system prompt (brain hash: %s)", brain_hash)
+    return _cached_system_prompt
+
+
 def _build_grading_prompt(card_info: Optional[dict] = None, has_back: bool = False) -> str:
     """Build the user prompt for vision grading."""
     card_context = ""
@@ -98,27 +127,34 @@ Examine the card carefully and provide:
 IMPORTANT:
 - Do NOT penalise printed card artwork, textures, holo patterns, or set logos as defects
 - Only score PHYSICAL damage: whitening, scratches, dents, creases, chips, stains, print lines
-- Be fair but accurate — lean toward the higher grade on borderline calls
+- Be fair and accurate — grade exactly what you see, neither too harsh nor too lenient
 - Consider the card era: vintage cards (pre-2003) are expected to have some wear
+- This image is from a 600 DPI flatbed scanner — ignore scanner artifacts, dust, and holo refraction
+- Only deduct points for defects you can specifically identify and describe
+- CRITICAL: Look closely at ALL 4 corners for whitening, softening, or wear — corners are the most commonly missed defect
+- CRITICAL: Examine the surface carefully for scratches, scuffs, or wear — surface damage is often subtle in scans
+- A perfect 10 means ZERO visible defects — most cards have at least minor wear, so 10s should be rare
+- Corner whitening on even 1 corner drops the corners score to 9.0 or below depending on severity
+- Visible surface scratches or scuffs drop the surface score to 8.0-9.0 depending on severity
 
 Respond in this exact JSON format:
 {{
-  "centering_score": 9.5,
-  "corners_score": 8.5,
-  "edges_score": 9.0,
-  "surface_score": 8.0,
-  "final_grade": 8.5,
-  "grade_explanation": "Brief explanation of the grade...",
-  "confidence": 0.85,
+  "centering_score": <1.0-10.0>,
+  "corners_score": <1.0-10.0>,
+  "edges_score": <1.0-10.0>,
+  "surface_score": <1.0-10.0>,
+  "final_grade": <1.0-10.0>,
+  "grade_explanation": "Explain what you see and why you chose each score...",
+  "confidence": <0.0-1.0>,
   "defects": [
     {{
-      "category": "corners",
-      "defect_type": "whitening",
-      "severity": "minor",
-      "location": "bottom_left corner",
+      "category": "corners|edges|surface|centering",
+      "defect_type": "whitening|scratch|dent|crease|chip|print_line|stain|softening",
+      "severity": "minor|moderate|severe",
+      "location": "top_left corner|bottom_right edge|center surface|etc",
       "score_impact": -0.5,
       "confidence": 0.8,
-      "description": "Light whitening visible on bottom-left corner"
+      "description": "Describe the specific defect you see"
     }}
   ]
 }}"""
@@ -141,16 +177,8 @@ async def grade_card_with_vision(
     """
     from app.services.ai.openrouter import chat
 
-    # Load grading brain as system prompt
-    brain = _load_grading_brain()
-    system_prompt = f"""You are an expert trading card grader for RKT Grading.
-You evaluate card condition by examining scanned images.
-
-Follow these grading standards precisely:
-
-{brain}
-
-Always respond with valid JSON matching the requested format."""
+    # P8: Use cached system prompt (only rebuilds when brain file changes)
+    system_prompt = _get_system_prompt()
 
     # Load images
     images = []

@@ -1,5 +1,7 @@
 """Simple publish-subscribe event bus for inter-service communication."""
 
+import asyncio
+import inspect
 import logging
 import threading
 from collections import defaultdict
@@ -55,12 +57,35 @@ class EventBus:
                 self._handlers[event_type].remove(handler)
 
     def publish(self, event_type: str, data: Any = None) -> None:
-        """Publish an event to all registered handlers."""
+        """Publish an event to all registered handlers (sync only).
+
+        For handlers that are coroutines, use publish_async() instead.
+        Sync handlers that perform I/O are dispatched via asyncio.to_thread()
+        when an event loop is running (see publish_async).
+        """
         with self._lock:
             handlers = list(self._handlers.get(event_type, []))
         for handler in handlers:
             try:
                 handler(data)
+            except Exception as e:
+                logger.error(f"Event handler {handler.__name__} failed for {event_type}: {e}")
+
+    async def publish_async(self, event_type: str, data: Any = None) -> None:
+        """Publish an event, properly handling both sync and async handlers.
+
+        - Coroutine handlers are awaited directly.
+        - Regular sync handlers are dispatched via asyncio.to_thread() so
+          they don't block the event loop if they perform I/O.
+        """
+        with self._lock:
+            handlers = list(self._handlers.get(event_type, []))
+        for handler in handlers:
+            try:
+                if inspect.iscoroutinefunction(handler):
+                    await handler(data)
+                else:
+                    await asyncio.to_thread(handler, data)
             except Exception as e:
                 logger.error(f"Event handler {handler.__name__} failed for {event_type}: {e}")
 

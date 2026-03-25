@@ -8,7 +8,7 @@
  * Settings → NFC / Printer. Default is NTag424 DNA (more secure).
  */
 import { api } from '../api.js';
-import { showToast } from '../components.js';
+import { showToast, escapeHtml } from '../components.js';
 
 let _pollTimer = null;
 let _currentAssembly = null;
@@ -165,9 +165,9 @@ async function showSelectCardStep() {
                     <tbody>
                         ${available.map(c => `
                             <tr>
-                                <td><code class="small">${c.serial_number || '—'}</code></td>
-                                <td>${c.card_name || 'Unknown'}</td>
-                                <td class="text-muted">${c.set_name || '—'}</td>
+                                <td><code class="small">${escapeHtml(c.serial_number || '—')}</code></td>
+                                <td>${escapeHtml(c.card_name || 'Unknown')}</td>
+                                <td class="text-muted">${escapeHtml(c.set_name || '—')}</td>
                                 <td><span class="badge bg-primary">${c.final_grade || '—'}</span></td>
                                 <td class="text-end">
                                     <button class="btn btn-sm btn-primary btn-start-assembly" data-card-id="${c.id}">
@@ -197,7 +197,7 @@ async function showSelectCardStep() {
             });
         });
     } catch (e) {
-        body.innerHTML = `<div class="alert alert-warning m-0"><i class="bi bi-exclamation-triangle me-2"></i>Could not load cards: ${e.message}</div>`;
+        body.innerHTML = `<div class="alert alert-warning m-0"><i class="bi bi-exclamation-triangle me-2"></i>Could not load cards: ${escapeHtml(e.message)}</div>`;
     }
 }
 
@@ -224,15 +224,15 @@ async function showPrintStep() {
                 <div class="row g-3">
                     <div class="col-sm-6">
                         <label class="form-label small text-muted">Card</label>
-                        <input class="form-control form-control-sm" disabled value="${a.card?.card_name || 'Unknown'}">
+                        <input class="form-control form-control-sm" disabled value="${escapeHtml(a.card?.card_name || 'Unknown')}">
                     </div>
                     <div class="col-sm-3">
                         <label class="form-label small text-muted">Grade</label>
-                        <input class="form-control form-control-sm" disabled value="${a.grade || '—'}">
+                        <input class="form-control form-control-sm" disabled value="${escapeHtml(a.grade || '—')}">
                     </div>
                     <div class="col-sm-3">
                         <label class="form-label small text-muted">Serial</label>
-                        <input class="form-control form-control-sm" disabled value="${a.serial_number}">
+                        <input class="form-control form-control-sm" disabled value="${escapeHtml(a.serial_number)}">
                     </div>
                     <div class="col-sm-8">
                         <label class="form-label small text-muted">Printer</label>
@@ -280,12 +280,12 @@ async function showPrintStep() {
                 }
                 setTimeout(() => showNfcStep(), 1200);
             } else {
-                statusDiv.innerHTML = `<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle me-1"></i>${result.print_job?.error_message || 'Print failed'}</div>`;
+                statusDiv.innerHTML = `<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle me-1"></i>${escapeHtml(result.print_job?.error_message || 'Print failed')}</div>`;
                 btn.disabled = false;
                 btn.innerHTML = '<i class="bi bi-printer me-1"></i>Retry';
             }
         } catch (e) {
-            statusDiv.innerHTML = `<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle me-1"></i>${e.message}</div>`;
+            statusDiv.innerHTML = `<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle me-1"></i>${escapeHtml(e.message)}</div>`;
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-printer me-1"></i>Retry';
         }
@@ -325,7 +325,7 @@ async function showNfcStep() {
                         <span class="badge ${isSecure ? 'bg-warning text-dark' : 'bg-secondary'}">${tagLabel}</span>
                         <a href="#/settings" class="ms-2 small text-muted">Change</a>
                     </div>
-                    <div class="text-muted small">Serial: <code>${a.serial_number}</code></div>
+                    <div class="text-muted small">Serial: <code>${escapeHtml(a.serial_number)}</code></div>
                 </div>
             </div>
             <div class="col-lg-4 text-end">
@@ -352,12 +352,12 @@ async function showNfcStep() {
                 statusDiv.innerHTML = `<div class="alert alert-success py-2 small"><i class="bi bi-check-circle me-1"></i>${tagLabel} programmed! UID: <code>${tag.tag_uid}</code></div>`;
                 setTimeout(() => showCompleteStep(), 1200);
             } else {
-                statusDiv.innerHTML = `<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle me-1"></i>${tag?.error_message || 'Failed'}</div>`;
+                statusDiv.innerHTML = `<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle me-1"></i>${escapeHtml(tag?.error_message || 'Failed')}</div>`;
                 btn.disabled = false;
                 btn.innerHTML = `<i class="bi ${icon} me-1"></i>Retry`;
             }
         } catch (e) {
-            statusDiv.innerHTML = `<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle me-1"></i>${e.message}</div>`;
+            statusDiv.innerHTML = `<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle me-1"></i>${escapeHtml(e.message)}</div>`;
             btn.disabled = false;
             btn.innerHTML = `<i class="bi ${icon} me-1"></i>Retry`;
         }
@@ -376,7 +376,7 @@ async function showCompleteStep() {
         <div class="text-center py-4">
             <i class="bi bi-check-circle-fill text-success" style="font-size: 2.5rem;"></i>
             <h5 class="mt-2 mb-1">Assembly Complete</h5>
-            <p class="text-muted small mb-3"><code>${a.serial_number}</code></p>
+            <p class="text-muted small mb-3"><code>${escapeHtml(a.serial_number)}</code></p>
 
             <div class="row justify-content-center">
                 <div class="col-md-6">
@@ -447,10 +447,10 @@ async function loadQueue() {
 
         tbody.innerHTML = assemblies.map(a => `
             <tr class="${_currentAssembly?.id === a.id ? 'table-active' : ''}">
-                <td><code class="small">${a.serial_number}</code></td>
-                <td class="small">${a.card?.card_name || '—'}</td>
-                <td><span class="badge bg-primary">${a.grade || '—'}</span></td>
-                <td><span class="badge bg-${statusColors[a.workflow_status] || 'secondary'}">${a.workflow_status.replace(/_/g, ' ')}</span></td>
+                <td><code class="small">${escapeHtml(a.serial_number)}</code></td>
+                <td class="small">${escapeHtml(a.card?.card_name || '—')}</td>
+                <td><span class="badge bg-primary">${escapeHtml(a.grade || '—')}</span></td>
+                <td><span class="badge bg-${statusColors[a.workflow_status] || 'secondary'}">${escapeHtml(a.workflow_status.replace(/_/g, ' '))}</span></td>
                 <td class="text-end">
                     <button class="btn btn-sm btn-outline-secondary btn-resume" data-id="${a.id}">
                         ${a.workflow_status === 'complete' ? 'View' : 'Resume'}
@@ -478,6 +478,6 @@ async function loadQueue() {
             });
         });
     } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-danger small">Error: ${e.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="text-danger small">Error: ${escapeHtml(e.message)}</td></tr>`;
     }
 }

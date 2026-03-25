@@ -5,7 +5,7 @@
  * a top-level overview with quick-action shortcuts and system status.
  */
 import { api } from '../api.js';
-import { createStatCard, createEmptyState, createLoadingSpinner, formatDate, createStatusBadge } from '../components.js';
+import { createStatCard, createEmptyState, createLoadingSpinner, formatDate, createStatusBadge, escapeHtml } from '../components.js';
 
 function buildStatusRow(label, statusText, isOk) {
     const bg = isOk ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning';
@@ -59,9 +59,9 @@ export async function init(container) {
                                             <tbody>
                                                 ${activity.map(e => `
                                                     <tr>
-                                                        <td>${e.action}</td>
-                                                        <td><span class="badge bg-light text-dark">${e.event_type || '\u2014'}</span></td>
-                                                        <td>${e.operator || '\u2014'}</td>
+                                                        <td>${escapeHtml(e.action)}</td>
+                                                        <td><span class="badge bg-light text-dark">${escapeHtml(e.event_type || '\u2014')}</span></td>
+                                                        <td>${escapeHtml(e.operator || '\u2014')}</td>
                                                         <td class="text-muted small">${formatDate(e.created_at)}</td>
                                                     </tr>
                                                 `).join('')}
@@ -110,7 +110,7 @@ export async function init(container) {
         container.innerHTML = `
             <div class="alert alert-danger m-4">
                 <i class="bi bi-exclamation-triangle me-2"></i>
-                Failed to load dashboard: ${err.message}
+                Failed to load dashboard: ${escapeHtml(err.message)}
             </div>`;
     }
 }

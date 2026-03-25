@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime, timezone
+from html import escape
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,10 +17,11 @@ router = APIRouter()
 
 def _score_bar_html(label: str, score: Optional[float], max_score: float = 10.0) -> str:
     """Generate an HTML bar for a sub-score."""
+    safe_label = escape(str(label))
     if score is None:
         return f"""
         <div class="score-row">
-            <span class="score-label">{label}</span>
+            <span class="score-label">{safe_label}</span>
             <div class="score-bar-bg"><div class="score-bar" style="width: 0%"></div></div>
             <span class="score-value">N/A</span>
         </div>"""
@@ -27,7 +29,7 @@ def _score_bar_html(label: str, score: Optional[float], max_score: float = 10.0)
     color = "#28a745" if score >= 8.0 else "#ffc107" if score >= 5.0 else "#dc3545"
     return f"""
         <div class="score-row">
-            <span class="score-label">{label}</span>
+            <span class="score-label">{safe_label}</span>
             <div class="score-bar-bg">
                 <div class="score-bar" style="width: {pct:.1f}%; background: {color}"></div>
             </div>
@@ -56,8 +58,9 @@ def _severity_badge(severity: str) -> str:
         "major": "#fd7e14",
         "severe": "#dc3545",
     }
+    safe_severity = escape(str(severity))
     bg = colors.get(severity, "#6c757d")
-    return f'<span class="severity-badge" style="background:{bg}">{severity}</span>'
+    return f'<span class="severity-badge" style="background:{bg}">{safe_severity}</span>'
 
 
 @router.get("/card/{card_id}/pdf", response_class=HTMLResponse)
@@ -125,7 +128,7 @@ async def generate_grade_report(card_id: str, db: Session = Depends(get_db)):
     auth_status_str = "Not checked"
     auth_confidence_str = ""
     if auth_decision:
-        auth_status_str = (auth_decision.operator_override_status or auth_decision.overall_status or "unknown").title()
+        auth_status_str = escape((auth_decision.operator_override_status or auth_decision.overall_status or "unknown").title())
         auth_confidence_str = f" ({auth_decision.confidence:.0%})" if auth_decision.confidence else ""
 
     # Grading confidence
@@ -149,10 +152,10 @@ async def generate_grade_report(card_id: str, db: Session = Depends(get_db)):
     for d in defects:
         defect_rows += f"""
             <tr>
-                <td>{d.defect_type}</td>
-                <td>{d.category}</td>
-                <td>{_severity_badge(d.severity)}</td>
-                <td>{d.location_description or "N/A"}</td>
+                <td>{escape(str(d.defect_type or ""))}</td>
+                <td>{escape(str(d.category or ""))}</td>
+                <td>{_severity_badge(d.severity or "")}</td>
+                <td>{escape(str(d.location_description or "N/A"))}</td>
                 <td>{d.confidence:.0%}</td>
             </tr>"""
     if not defect_rows:
@@ -173,7 +176,7 @@ async def generate_grade_report(card_id: str, db: Session = Depends(get_db)):
         image_section = f"""
         <div class="image-section">
             <h3>Card Image</h3>
-            <img src="{front_image_url}" alt="Card front scan" class="card-image" />
+            <img src="{escape(front_image_url)}" alt="Card front scan" class="card-image" />
         </div>"""
     else:
         image_section = """
@@ -188,7 +191,7 @@ async def generate_grade_report(card_id: str, db: Session = Depends(get_db)):
         override_notice = f"""
         <div class="override-notice">
             <strong>Grade Override:</strong> Auto-grade {decision.auto_grade:.1f} overridden to {decision.operator_override_grade:.1f}
-            <br><strong>Reason:</strong> {decision.override_reason or "N/A"}
+            <br><strong>Reason:</strong> {escape(str(decision.override_reason or "N/A"))}
         </div>"""
 
     html = f"""<!DOCTYPE html>
@@ -196,7 +199,7 @@ async def generate_grade_report(card_id: str, db: Session = Depends(get_db)):
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RKT Grade Report - {card.card_name or card_id}</title>
+<title>RKT Grade Report - {escape(str(card.card_name or card_id))}</title>
 <style>
     /* Reset and base */
     * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -429,7 +432,7 @@ async def generate_grade_report(card_id: str, db: Session = Depends(get_db)):
     <div class="grade-badge">
         <div class="grade-label">Final Grade</div>
         <div class="grade-number">{grade_str}</div>
-        <div class="grade-label">{decision.status.upper()}</div>
+        <div class="grade-label">{escape(str(decision.status or "").upper())}</div>
     </div>
 </div>
 
@@ -438,12 +441,12 @@ async def generate_grade_report(card_id: str, db: Session = Depends(get_db)):
 <div class="section">
     <h3>Card Information</h3>
     <div class="info-grid">
-        <div class="info-item"><span class="label">Card Name:</span> <span>{card.card_name or "N/A"}</span></div>
-        <div class="info-item"><span class="label">Set:</span> <span>{card.set_name or "N/A"}</span></div>
-        <div class="info-item"><span class="label">Collector #:</span> <span>{card.collector_number or "N/A"}</span></div>
-        <div class="info-item"><span class="label">Language:</span> <span>{card.language or "N/A"}</span></div>
-        <div class="info-item"><span class="label">Rarity:</span> <span>{card.rarity or "N/A"}</span></div>
-        <div class="info-item"><span class="label">Serial Number:</span> <span>{card.serial_number or "N/A"}</span></div>
+        <div class="info-item"><span class="label">Card Name:</span> <span>{escape(str(card.card_name or "N/A"))}</span></div>
+        <div class="info-item"><span class="label">Set:</span> <span>{escape(str(card.set_name or "N/A"))}</span></div>
+        <div class="info-item"><span class="label">Collector #:</span> <span>{escape(str(card.collector_number or "N/A"))}</span></div>
+        <div class="info-item"><span class="label">Language:</span> <span>{escape(str(card.language or "N/A"))}</span></div>
+        <div class="info-item"><span class="label">Rarity:</span> <span>{escape(str(card.rarity or "N/A"))}</span></div>
+        <div class="info-item"><span class="label">Serial Number:</span> <span>{escape(str(card.serial_number or "N/A"))}</span></div>
     </div>
 </div>
 
@@ -452,7 +455,7 @@ async def generate_grade_report(card_id: str, db: Session = Depends(get_db)):
         <h3>Sub-Scores</h3>
         {sub_score_bars}
         <div style="margin-top:10px; font-size:13px;">
-            <strong>Centering Ratio:</strong> {centering_display}
+            <strong>Centering Ratio:</strong> {escape(str(centering_display))}
         </div>
     </div>
     <div class="section">
@@ -460,9 +463,9 @@ async def generate_grade_report(card_id: str, db: Session = Depends(get_db)):
         <div class="info-item"><span class="label">Raw Score:</span> <span>{f"{decision.raw_grade:.2f}" if decision.raw_grade else "N/A"}</span></div>
         <div class="info-item"><span class="label">Auto Grade:</span> <span>{f"{decision.auto_grade:.1f}" if decision.auto_grade else "N/A"}</span></div>
         <div class="info-item"><span class="label">Confidence:</span> <span>{confidence_str}</span></div>
-        <div class="info-item"><span class="label">Profile:</span> <span>{decision.sensitivity_profile}</span></div>
-        <div class="info-item"><span class="label">Status:</span> <span>{decision.status}</span></div>
-        <div class="info-item"><span class="label">Operator:</span> <span>{decision.graded_by or "N/A"}</span></div>
+        <div class="info-item"><span class="label">Profile:</span> <span>{escape(str(decision.sensitivity_profile or "N/A"))}</span></div>
+        <div class="info-item"><span class="label">Status:</span> <span>{escape(str(decision.status or "N/A"))}</span></div>
+        <div class="info-item"><span class="label">Operator:</span> <span>{escape(str(decision.graded_by or "N/A"))}</span></div>
         <div class="info-item"><span class="label">Approved At:</span> <span>{approved_at}</span></div>
         <div class="info-item"><span class="label">Authenticity:</span> <span>{auth_status_str}{auth_confidence_str}</span></div>
     </div>

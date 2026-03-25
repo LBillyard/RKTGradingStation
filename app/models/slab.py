@@ -3,8 +3,8 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Float, Integer, Text, DateTime, ForeignKey, Boolean
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import String, Float, Integer, Text, DateTime, ForeignKey, Boolean, Index
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base, uuid_pk, created_at_col, updated_at_col
 
@@ -12,6 +12,9 @@ from app.db.database import Base, uuid_pk, created_at_col, updated_at_col
 class PrintJob(Base):
     """Tracks a label print operation for a slab insert."""
     __tablename__ = "print_jobs"
+    __table_args__ = (
+        Index("idx_print_jobs_card_record_id", "card_record_id"),
+    )
 
     id: Mapped[uuid_pk]
     card_record_id: Mapped[str] = mapped_column(String(36), ForeignKey("card_records.id"))
@@ -28,10 +31,15 @@ class PrintJob(Base):
     created_at: Mapped[created_at_col]
     updated_at: Mapped[updated_at_col]
 
+    card_record: Mapped["CardRecord"] = relationship(back_populates="print_jobs")
+
 
 class NfcTag(Base):
     """Tracks a programmed NFC tag embedded in a slab."""
     __tablename__ = "nfc_tags"
+    __table_args__ = (
+        Index("idx_nfc_tags_card_record_id", "card_record_id"),
+    )
 
     id: Mapped[uuid_pk]
     card_record_id: Mapped[str] = mapped_column(String(36), ForeignKey("card_records.id"))
@@ -45,6 +53,8 @@ class NfcTag(Base):
     error_message: Mapped[Optional[str]] = mapped_column(Text)
     programmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[created_at_col]
+
+    card_record: Mapped["CardRecord"] = relationship(back_populates="nfc_tags")
 
 
 class SlabAssembly(Base):
@@ -62,3 +72,5 @@ class SlabAssembly(Base):
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[created_at_col]
     updated_at: Mapped[updated_at_col]
+
+    card_record: Mapped["CardRecord"] = relationship(back_populates="slab_assemblies")

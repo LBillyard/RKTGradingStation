@@ -7,6 +7,7 @@ Syncs summaries to the cloud periodically.
 import json
 import logging
 import sqlite3
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field, asdict
@@ -18,6 +19,10 @@ logger = logging.getLogger(__name__)
 
 _DB_PATH = Path("data/agent_telemetry.db")
 _conn: Optional[sqlite3.Connection] = None
+# Thread-safety lock: sqlite3 with check_same_thread=False allows multi-thread
+# access to the same connection, but sqlite3 connections are NOT thread-safe for
+# concurrent writes. This lock serializes all DB operations.
+_db_lock = threading.Lock()
 
 
 def _get_db() -> sqlite3.Connection:
@@ -26,13 +31,17 @@ def _get_db() -> sqlite3.Connection:
     if _conn is not None:
         return _conn
 
-    _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _conn = sqlite3.connect(str(_DB_PATH), check_same_thread=False)
-    _conn.row_factory = sqlite3.Row
-    _conn.execute("PRAGMA journal_mode=WAL")
+    with _db_lock:
+        if _conn is not None:
+            return _conn
 
-    # Create tables
-    _conn.executescript("""
+        _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _conn = sqlite3.connect(str(_DB_PATH), check_same_thread=False)
+        _conn.row_factory = sqlite3.Row
+        _conn.execute("PRAGMA journal_mode=WAL")
+
+        # Create tables
+        _conn.executescript("""
         CREATE TABLE IF NOT EXISTS sessions (
             id TEXT PRIMARY KEY,
             card_record_id TEXT,
@@ -98,10 +107,10 @@ def _get_db() -> sqlite3.Connection:
             overall_score REAL,
             is_calibration INTEGER DEFAULT 0
         );
-    """)
-    _conn.commit()
-    logger.info(f"Telemetry DB initialized at {_DB_PATH}")
-    return _conn
+        """)
+        _conn.commit()
+        logger.info(f"Telemetry DB initialized at {_DB_PATH}")
+        return _conn
 
 
 # ---- Session Timing ----
@@ -133,6 +142,8 @@ _active_sessions: dict[str, GradingSession] = {}
 
 def start_session(operator_name: str = "", station_id: str = "") -> GradingSession:
     """Start a new grading session timer."""
+    from datetime import timedelta
+
     session = GradingSession(
         operator_name=operator_name,
         station_id=station_id,
@@ -140,15 +151,27 @@ def start_session(operator_name: str = "", station_id: str = "") -> GradingSessi
     )
     _active_sessions[session.id] = session
 
-    db = _get_db()
-    db.execute(
-        "INSERT INTO sessions (id, operator_name, station_id, started_at, status) VALUES (?, ?, ?, ?, ?)",
-        (session.id, operator_name, station_id, session.started_at, "active"),
-    )
-    db.commit()
+    # Prune sessions older than 24 hours to prevent unbounded growth
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    stale = [k for k, v in _active_sessions.items() if v.started_at < cutoff]
+    for k in stale:
+        del _active_sessions[k]
+
+    with _db_lock:
+        db = _get_db()
+        db.execute(
+            "INSERT INTO sessions (id, operator_name, station_id, started_at, status) VALUES (?, ?, ?, ?, ?)",
+            (session.id, operator_name, station_id, session.started_at, "active"),
+        )
+        db.commit()
     return session
 
 
+# SECURITY: This frozenset whitelist is the SQL-injection defence for update_session().
+# Column names are interpolated into the UPDATE statement because sqlite3 parameter
+# binding only works for values, not identifiers.  Every key in kwargs is filtered
+# through this set so only known column names reach the SQL string.  Changing this
+# set changes what columns callers can write — review carefully before adding entries.
 _SESSION_ALLOWED_FIELDS = frozenset({
     "card_record_id", "serial_number", "operator_name", "station_id",
     "scan_started_at", "scan_completed_at", "grade_started_at",
@@ -164,7 +187,6 @@ def update_session(session_id: str, **kwargs) -> Optional[GradingSession]:
     if not session:
         return None
 
-    # Whitelist field names to prevent SQL injection
     safe_kwargs = {k: v for k, v in kwargs.items() if k in _SESSION_ALLOWED_FIELDS}
     if not safe_kwargs:
         return session
@@ -173,11 +195,12 @@ def update_session(session_id: str, **kwargs) -> Optional[GradingSession]:
         if hasattr(session, key):
             setattr(session, key, value)
 
-    db = _get_db()
-    fields = ", ".join(f"{k} = ?" for k in safe_kwargs)
-    values = list(safe_kwargs.values()) + [session_id]
-    db.execute(f"UPDATE sessions SET {fields} WHERE id = ?", values)
-    db.commit()
+    with _db_lock:
+        db = _get_db()
+        fields = ", ".join(f"{k} = ?" for k in safe_kwargs)
+        values = list(safe_kwargs.values()) + [session_id]
+        db.execute(f"UPDATE sessions SET {fields} WHERE id = ?", values)
+        db.commit()
     return session
 
 
@@ -199,37 +222,46 @@ def complete_session(session_id: str) -> Optional[GradingSession]:
     except Exception:
         pass
 
-    db = _get_db()
-    db.execute(
-        "UPDATE sessions SET completed_at = ?, total_seconds = ?, status = ? WHERE id = ?",
-        (now, session.total_seconds, "completed", session_id),
-    )
-    db.commit()
+    with _db_lock:
+        db = _get_db()
+        db.execute(
+            "UPDATE sessions SET completed_at = ?, total_seconds = ?, status = ? WHERE id = ?",
+            (now, session.total_seconds, "completed", session_id),
+        )
+        db.commit()
     return session
 
 
 def get_productivity_stats(hours: int = 24) -> dict:
     """Get operator productivity stats for the last N hours."""
-    db = _get_db()
-    cutoff = datetime.now(timezone.utc).isoformat()
+    from datetime import timedelta
 
-    rows = db.execute("""
-        SELECT
-            operator_name,
-            COUNT(*) as total_cards,
-            AVG(total_seconds) as avg_seconds,
-            MIN(total_seconds) as fastest,
-            MAX(total_seconds) as slowest,
-            SUM(total_seconds) as total_time
-        FROM sessions
-        WHERE status = 'completed' AND completed_at IS NOT NULL
-        GROUP BY operator_name
-    """).fetchall()
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    with _db_lock:
+        db = _get_db()
+        rows = db.execute("""
+            SELECT
+                operator_name,
+                COUNT(*) as total_cards,
+                AVG(total_seconds) as avg_seconds,
+                MIN(total_seconds) as fastest,
+                MAX(total_seconds) as slowest,
+                SUM(total_seconds) as total_time
+            FROM sessions
+            WHERE status = 'completed' AND completed_at IS NOT NULL
+                AND completed_at >= ?
+            GROUP BY operator_name
+        """, (cutoff,)).fetchall()
+
+    by_operator = [dict(r) for r in rows]
+    total_cards = sum(s["total_cards"] for s in by_operator)
+    total_time = sum((s.get("total_time") or 0) for s in by_operator)
+    overall_avg = total_time / max(total_cards, 1)
 
     return {
-        "operators": [dict(r) for r in rows],
-        "total_completed": sum(r["total_cards"] for r in rows),
-        "overall_avg_seconds": sum(r["avg_seconds"] or 0 for r in rows) / max(len(rows), 1),
+        "operators": by_operator,
+        "total_completed": total_cards,
+        "overall_avg_seconds": overall_avg,
     }
 
 
@@ -237,27 +269,29 @@ def get_productivity_stats(hours: int = 24) -> dict:
 
 def record_metric(metric_type: str, metric_name: str, value: float, metadata: dict = None, station_id: str = "") -> None:
     """Record a telemetry metric."""
-    db = _get_db()
-    db.execute(
-        "INSERT INTO metrics (timestamp, metric_type, metric_name, value, metadata, station_id) VALUES (?, ?, ?, ?, ?, ?)",
-        (datetime.now(timezone.utc).isoformat(), metric_type, metric_name, value,
-         json.dumps(metadata) if metadata else None, station_id),
-    )
-    db.commit()
+    with _db_lock:
+        db = _get_db()
+        db.execute(
+            "INSERT INTO metrics (timestamp, metric_type, metric_name, value, metadata, station_id) VALUES (?, ?, ?, ?, ?, ?)",
+            (datetime.now(timezone.utc).isoformat(), metric_type, metric_name, value,
+             json.dumps(metadata) if metadata else None, station_id),
+        )
+        db.commit()
 
 
 def get_metrics(metric_type: str = None, limit: int = 100) -> list[dict]:
     """Get recent metrics, optionally filtered by type."""
-    db = _get_db()
-    if metric_type:
-        rows = db.execute(
-            "SELECT * FROM metrics WHERE metric_type = ? ORDER BY timestamp DESC LIMIT ?",
-            (metric_type, limit),
-        ).fetchall()
-    else:
-        rows = db.execute(
-            "SELECT * FROM metrics ORDER BY timestamp DESC LIMIT ?", (limit,),
-        ).fetchall()
+    with _db_lock:
+        db = _get_db()
+        if metric_type:
+            rows = db.execute(
+                "SELECT * FROM metrics WHERE metric_type = ? ORDER BY timestamp DESC LIMIT ?",
+                (metric_type, limit),
+            ).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT * FROM metrics ORDER BY timestamp DESC LIMIT ?", (limit,),
+            ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -274,24 +308,26 @@ def log_custody_event(
     details: str = "",
 ) -> None:
     """Log a chain of custody event for a card."""
-    db = _get_db()
-    db.execute(
-        """INSERT INTO custody_log
-        (timestamp, event_type, card_serial, operator_name, station_id, scanner_id, printer_id, image_hash, details)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (datetime.now(timezone.utc).isoformat(), event_type, card_serial,
-         operator_name, station_id, scanner_id, printer_id, image_hash, details),
-    )
-    db.commit()
+    with _db_lock:
+        db = _get_db()
+        db.execute(
+            """INSERT INTO custody_log
+            (timestamp, event_type, card_serial, operator_name, station_id, scanner_id, printer_id, image_hash, details)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (datetime.now(timezone.utc).isoformat(), event_type, card_serial,
+             operator_name, station_id, scanner_id, printer_id, image_hash, details),
+        )
+        db.commit()
 
 
 def get_custody_chain(card_serial: str) -> list[dict]:
     """Get the full chain of custody for a card."""
-    db = _get_db()
-    rows = db.execute(
-        "SELECT * FROM custody_log WHERE card_serial = ? ORDER BY timestamp",
-        (card_serial,),
-    ).fetchall()
+    with _db_lock:
+        db = _get_db()
+        rows = db.execute(
+            "SELECT * FROM custody_log WHERE card_serial = ? ORDER BY timestamp",
+            (card_serial,),
+        ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -305,24 +341,25 @@ def record_scan_quality(
     """Record scanner quality metrics from a scan."""
     overall = (brightness * 0.2 + contrast * 0.3 + sharpness * 0.35 + (100 - noise_level) * 0.15)
 
-    db = _get_db()
-    db.execute(
-        """INSERT INTO scanner_quality
-        (timestamp, station_id, scanner_id, brightness, contrast, sharpness, noise_level, overall_score, is_calibration)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (datetime.now(timezone.utc).isoformat(), station_id, scanner_id,
-         brightness, contrast, sharpness, noise_level, overall, int(is_calibration)),
-    )
-    db.commit()
+    with _db_lock:
+        db = _get_db()
+        db.execute(
+            """INSERT INTO scanner_quality
+            (timestamp, station_id, scanner_id, brightness, contrast, sharpness, noise_level, overall_score, is_calibration)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (datetime.now(timezone.utc).isoformat(), station_id, scanner_id,
+             brightness, contrast, sharpness, noise_level, overall, int(is_calibration)),
+        )
+        db.commit()
 
-    # Check for quality degradation
-    recent = db.execute(
-        "SELECT AVG(overall_score) as avg_score FROM scanner_quality WHERE is_calibration = 0 ORDER BY timestamp DESC LIMIT 10",
-    ).fetchone()
+        # Check for quality degradation
+        recent = db.execute(
+            "SELECT AVG(overall_score) as avg_score FROM (SELECT overall_score FROM scanner_quality WHERE is_calibration = 0 ORDER BY timestamp DESC LIMIT 10)",
+        ).fetchone()
 
-    baseline = db.execute(
-        "SELECT AVG(overall_score) as avg_score FROM scanner_quality WHERE is_calibration = 1 ORDER BY timestamp DESC LIMIT 5",
-    ).fetchone()
+        baseline = db.execute(
+            "SELECT AVG(overall_score) as avg_score FROM (SELECT overall_score FROM scanner_quality WHERE is_calibration = 1 ORDER BY timestamp DESC LIMIT 5)",
+        ).fetchone()
 
     result = {
         "overall_score": round(overall, 1),
@@ -343,10 +380,11 @@ def record_scan_quality(
 
 def get_scanner_quality_trend(limit: int = 50) -> list[dict]:
     """Get recent scanner quality readings."""
-    db = _get_db()
-    rows = db.execute(
-        "SELECT * FROM scanner_quality ORDER BY timestamp DESC LIMIT ?", (limit,),
-    ).fetchall()
+    with _db_lock:
+        db = _get_db()
+        rows = db.execute(
+            "SELECT * FROM scanner_quality ORDER BY timestamp DESC LIMIT ?", (limit,),
+        ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -354,32 +392,35 @@ def get_scanner_quality_trend(limit: int = 50) -> list[dict]:
 
 def cache_for_sync(endpoint: str, method: str, payload: dict) -> None:
     """Cache a failed cloud API call for later sync."""
-    db = _get_db()
-    db.execute(
-        "INSERT INTO offline_cache (created_at, endpoint, method, payload) VALUES (?, ?, ?, ?)",
-        (datetime.now(timezone.utc).isoformat(), endpoint, method, json.dumps(payload)),
-    )
-    db.commit()
+    with _db_lock:
+        db = _get_db()
+        db.execute(
+            "INSERT INTO offline_cache (created_at, endpoint, method, payload) VALUES (?, ?, ?, ?)",
+            (datetime.now(timezone.utc).isoformat(), endpoint, method, json.dumps(payload)),
+        )
+        db.commit()
     logger.info(f"Cached offline: {method} {endpoint}")
 
 
 def get_pending_sync() -> list[dict]:
     """Get all unsynced cached items."""
-    db = _get_db()
-    rows = db.execute(
-        "SELECT * FROM offline_cache WHERE synced = 0 ORDER BY created_at", ()
-    ).fetchall()
+    with _db_lock:
+        db = _get_db()
+        rows = db.execute(
+            "SELECT * FROM offline_cache WHERE synced = 0 ORDER BY created_at", ()
+        ).fetchall()
     return [dict(r) for r in rows]
 
 
 def mark_synced(cache_id: int) -> None:
     """Mark a cached item as synced."""
-    db = _get_db()
-    db.execute(
-        "UPDATE offline_cache SET synced = 1, synced_at = ? WHERE id = ?",
-        (datetime.now(timezone.utc).isoformat(), cache_id),
-    )
-    db.commit()
+    with _db_lock:
+        db = _get_db()
+        db.execute(
+            "UPDATE offline_cache SET synced = 1, synced_at = ? WHERE id = ?",
+            (datetime.now(timezone.utc).isoformat(), cache_id),
+        )
+        db.commit()
 
 
 def sync_cached_items(cloud_url: str) -> dict:

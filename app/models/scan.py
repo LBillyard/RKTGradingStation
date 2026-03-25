@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional, List
 
-from sqlalchemy import String, Integer, Text, DateTime, ForeignKey, Float
+from sqlalchemy import String, Integer, Text, DateTime, ForeignKey, Float, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base, uuid_pk, created_at_col, updated_at_col
@@ -29,6 +29,9 @@ class ScanSession(Base):
 class CardImage(Base):
     """A single scanned image (front or back) of a card."""
     __tablename__ = "card_images"
+    __table_args__ = (
+        Index("idx_card_images_session_id", "session_id"),
+    )
 
     id: Mapped[uuid_pk]
     session_id: Mapped[str] = mapped_column(String(36), ForeignKey("scan_sessions.id"))

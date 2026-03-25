@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from sqlalchemy import String, Text, JSON, Boolean, Integer
+from sqlalchemy import String, Text, JSON, Boolean, Integer, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base, uuid_pk, created_at_col, updated_at_col
@@ -11,6 +11,11 @@ from app.db.database import Base, uuid_pk, created_at_col, updated_at_col
 class AuditEvent(Base):
     """Immutable audit trail entry."""
     __tablename__ = "audit_events"
+    __table_args__ = (
+        Index("idx_audit_events_event_type", "event_type"),
+        Index("idx_audit_events_created_at", "created_at"),
+        Index("idx_audit_events_entity", "entity_type", "entity_id"),
+    )
 
     id: Mapped[uuid_pk]
     event_type: Mapped[str] = mapped_column(String(50))
@@ -27,6 +32,9 @@ class AuditEvent(Base):
 class OperatorAction(Base):
     """Record of an operator's action on a card record."""
     __tablename__ = "operator_actions"
+    __table_args__ = (
+        Index("idx_operator_actions_card_record_id", "card_record_id"),
+    )
 
     id: Mapped[uuid_pk]
     card_record_id: Mapped[Optional[str]] = mapped_column(String(36))

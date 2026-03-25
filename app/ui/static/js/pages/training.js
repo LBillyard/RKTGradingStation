@@ -3,7 +3,7 @@
  * system shows comparison and learns from deltas.
  */
 import { api } from '../api.js';
-import { showToast } from '../components.js';
+import { showToast, escapeHtml } from '../components.js';
 
 let _currentCard = null;
 
@@ -32,7 +32,7 @@ export async function init(container) {
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover table-sm mb-0">
-                            <thead><tr><th>Card</th><th>Expert</th><th>AI</th><th>Delta</th><th>Operator</th><th>Date</th></tr></thead>
+                            <thead><tr><th>Card</th><th>Expert</th><th>AI</th><th>Delta</th><th>Operator</th><th>Date</th><th></th></tr></thead>
                             <tbody id="training-tbody"></tbody>
                         </table>
                     </div>
@@ -60,7 +60,7 @@ async function showSelectStep() {
                     <select class="form-select" id="card-select">
                         <option value="">Choose a card...</option>
                         ${cards.filter(c => c.serial_number).map(c =>
-                            `<option value="${c.id}" data-name="${c.card_name || ''}" data-set="${c.set_name || ''}" data-serial="${c.serial_number || ''}" data-grade="${c.final_grade || ''}">${c.serial_number} — ${c.card_name || 'Unknown'} (${c.set_name || ''})</option>`
+                            `<option value="${c.id}" data-name="${escapeHtml(c.card_name || '')}" data-set="${escapeHtml(c.set_name || '')}" data-serial="${escapeHtml(c.serial_number || '')}" data-grade="${c.final_grade || ''}">${escapeHtml(c.serial_number)} — ${escapeHtml(c.card_name || 'Unknown')} (${escapeHtml(c.set_name || '')})</option>`
                         ).join('')}
                     </select>
                 </div>
@@ -87,7 +87,7 @@ async function showSelectStep() {
             showExpertGradeStep();
         });
     } catch (e) {
-        body.innerHTML = `<div class="alert alert-warning">Could not load cards: ${e.message}</div>`;
+        body.innerHTML = `<div class="alert alert-warning">Could not load cards: ${escapeHtml(e.message)}</div>`;
     }
 }
 
@@ -98,9 +98,9 @@ function showExpertGradeStep() {
     body.innerHTML = `
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h6 class="mb-0">Step 2: Enter your expert grades</h6>
-            <span class="badge bg-secondary">${c.serial_number}</span>
+            <span class="badge bg-secondary">${escapeHtml(c.serial_number)}</span>
         </div>
-        <p class="text-muted small mb-3"><strong>${c.card_name}</strong> — ${c.set_name}</p>
+        <p class="text-muted small mb-3"><strong>${escapeHtml(c.card_name)}</strong> — ${escapeHtml(c.set_name)}</p>
 
         <div class="row g-3">
             <div class="col-md-3">
@@ -182,7 +182,7 @@ function showExpertGradeStep() {
             showComparisonStep(result);
             await loadRecentGrades();
         } catch (e) {
-            statusDiv.innerHTML = `<div class="alert alert-danger py-2 small">${e.message}</div>`;
+            statusDiv.innerHTML = `<div class="alert alert-danger py-2 small">${escapeHtml(e.message)}</div>`;
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Submit';
         }
@@ -266,7 +266,7 @@ async function loadRecentGrades() {
         if (badge) badge.textContent = res.total || 0;
 
         if (!res.items?.length) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3 small">No training grades yet</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3 small">No training grades yet</td></tr>';
             return;
         }
 
@@ -275,15 +275,31 @@ async function loadRecentGrades() {
             const deltaClass = delta === null ? '' : Math.abs(delta) <= 0.5 ? 'text-success' : Math.abs(delta) <= 1.0 ? 'text-warning' : 'text-danger';
             return `
                 <tr>
-                    <td class="small">${item.card_name || '—'}</td>
+                    <td class="small">${escapeHtml(item.card_name || '—')}</td>
                     <td><span class="badge bg-primary">${item.expert_final}</span></td>
                     <td>${item.ai_final !== null ? `<span class="badge bg-secondary">${item.ai_final}</span>` : '<span class="text-muted small">pending</span>'}</td>
                     <td class="${deltaClass} fw-bold small">${delta !== null ? (delta > 0 ? '+' : '') + delta.toFixed(1) : '—'}</td>
-                    <td class="small text-muted">${item.operator_name}</td>
+                    <td class="small text-muted">${escapeHtml(item.operator_name)}</td>
                     <td class="small text-muted">${item.created_at?.split('T')[0] || ''}</td>
+                    <td><button class="btn btn-sm btn-outline-danger border-0 py-0 px-1 btn-delete-training" data-id="${escapeHtml(item.id)}" title="Delete"><i class="bi bi-trash"></i></button></td>
                 </tr>`;
         }).join('');
+
+        // Attach delete handlers
+        tbody.querySelectorAll('.btn-delete-training').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.currentTarget.dataset.id;
+                if (!confirm('Delete this training entry?')) return;
+                try {
+                    await api.delete(`/training/${id}`);
+                    showToast('Training entry deleted', 'success');
+                    await loadRecentGrades();
+                } catch (err) {
+                    showToast('Failed to delete: ' + (err.message || 'Unknown error'), 'danger');
+                }
+            });
+        });
     } catch {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-muted small">Error loading</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-muted small">Error loading</td></tr>';
     }
 }

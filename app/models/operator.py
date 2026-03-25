@@ -14,7 +14,7 @@ class Operator(Base):
 
     id: Mapped[uuid_pk]
     name: Mapped[str] = mapped_column(String(100), unique=True)
-    password_hash: Mapped[str] = mapped_column(String(64))  # SHA-256 hex digest
+    password_hash: Mapped[str] = mapped_column(String(255))  # Accommodates SHA-256 hex, bcrypt, argon2, etc.
     role: Mapped[str] = mapped_column(String(20), default="operator")  # "operator" or "admin"
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[created_at_col]

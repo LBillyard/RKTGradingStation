@@ -3,8 +3,8 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Integer, Float, Text, DateTime, ForeignKey, JSON, Boolean
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import String, Integer, Float, Text, DateTime, ForeignKey, JSON, Boolean, Index
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base, uuid_pk, created_at_col
 
@@ -12,6 +12,9 @@ from app.db.database import Base, uuid_pk, created_at_col
 class AuthenticityCheck(Base):
     """Individual authenticity check result."""
     __tablename__ = "authenticity_checks"
+    __table_args__ = (
+        Index("idx_authenticity_checks_card_record_id", "card_record_id"),
+    )
 
     id: Mapped[uuid_pk]
     card_record_id: Mapped[str] = mapped_column(String(36), ForeignKey("card_records.id"))
@@ -22,6 +25,8 @@ class AuthenticityCheck(Base):
     error_message: Mapped[Optional[str]] = mapped_column(Text)
     processing_time_ms: Mapped[Optional[int]] = mapped_column(Integer)
     created_at: Mapped[created_at_col]
+
+    card_record: Mapped["CardRecord"] = relationship(back_populates="authenticity_checks")
 
 
 class AuthenticityDecision(Base):
@@ -41,3 +46,5 @@ class AuthenticityDecision(Base):
     reviewed_by: Mapped[Optional[str]] = mapped_column(String(100))
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[created_at_col]
+
+    card_record: Mapped["CardRecord"] = relationship(back_populates="authenticity_decisions")

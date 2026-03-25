@@ -214,302 +214,73 @@ class GradingEngine:
                     holo_tolerance=True,
                 )
 
-        # Extract regions and measure borders (CPU-intensive)
-        regions, borders = await asyncio.to_thread(self._extract_regions_and_borders, image)
-
-        # Run all four analyzers concurrently via thread pool
-        centering_result, corner_result, edge_result, surface_result = await asyncio.gather(
-            asyncio.to_thread(self.centering_analyzer.analyze, borders),
-            asyncio.to_thread(
-                self.corner_analyzer.analyze,
-                [regions.corner_tl, regions.corner_tr, regions.corner_br, regions.corner_bl],
-            ),
-            asyncio.to_thread(
-                self.edge_analyzer.analyze,
-                [regions.edge_top, regions.edge_bottom, regions.edge_left, regions.edge_right],
-            ),
-            asyncio.to_thread(self.surface_analyzer.analyze, regions.surface),
-        )
-
-        # Collect and classify all front-side defects
-        classified_defects = self._classify_all_defects(
-            corner_result, edge_result, surface_result, image,
-        )
-        # Tag all front defects with side="front"
-        for d in classified_defects:
-            if isinstance(d.details, dict):
-                d.details["side"] = "front"
-            else:
-                d.details = {"side": "front"}
-
-        # ----------------------------------------------------------------
-        # B1: Back-side grading (corners, edges, surface — no centering)
-        # ----------------------------------------------------------------
-        back_corner_result = None
-        back_edge_result = None
-        back_surface_result = None
-
-        if back_image_path:
-            try:
-                back_image = await asyncio.to_thread(self._load_image, back_image_path)
-                back_regions, _back_borders = await asyncio.to_thread(
-                    self._extract_regions_and_borders, back_image,
-                )
-
-                # Run corners, edges, surface analysers on back image (no centering)
-                back_corner_result, back_edge_result, back_surface_result = await asyncio.gather(
-                    asyncio.to_thread(
-                        self.corner_analyzer.analyze,
-                        [back_regions.corner_tl, back_regions.corner_tr,
-                         back_regions.corner_br, back_regions.corner_bl],
-                    ),
-                    asyncio.to_thread(
-                        self.edge_analyzer.analyze,
-                        [back_regions.edge_top, back_regions.edge_bottom,
-                         back_regions.edge_left, back_regions.edge_right],
-                    ),
-                    asyncio.to_thread(self.surface_analyzer.analyze, back_regions.surface),
-                )
-
-                # Classify back-side defects and tag with side="back"
-                back_defects = self._classify_all_defects(
-                    back_corner_result, back_edge_result, back_surface_result, back_image,
-                )
-                for d in back_defects:
-                    if isinstance(d.details, dict):
-                        d.details["side"] = "back"
-                    else:
-                        d.details = {"side": "back"}
-
-                classified_defects.extend(back_defects)
-
-                # Combine front/back sub-scores: use the WORSE score
-                # for corners, edges, surface. Centering stays front-only.
-                corner_result = CornerResult(
-                    scores=corner_result.scores,
-                    defects=corner_result.defects + back_corner_result.defects,
-                    final_score=min(corner_result.final_score, back_corner_result.final_score),
-                    details={
-                        "front_score": corner_result.final_score,
-                        "back_score": back_corner_result.final_score,
-                    },
-                )
-                edge_result = EdgeResult(
-                    scores=edge_result.scores,
-                    defects=edge_result.defects + back_edge_result.defects,
-                    final_score=min(edge_result.final_score, back_edge_result.final_score),
-                    details={
-                        "front_score": edge_result.final_score,
-                        "back_score": back_edge_result.final_score,
-                    },
-                )
-                surface_result = SurfaceResult(
-                    defects=surface_result.defects + back_surface_result.defects,
-                    final_score=min(surface_result.final_score, back_surface_result.final_score),
-                    details={
-                        "front_score": surface_result.final_score,
-                        "back_score": back_surface_result.final_score,
-                    },
-                )
-
-                logger.info(
-                    "Back-side grading applied: corners=%.1f(f)→%.1f(min), "
-                    "edges=%.1f(f)→%.1f(min), surface=%.1f(f)→%.1f(min)",
-                    corner_result.details.get("front_score", 0),
-                    corner_result.final_score,
-                    edge_result.details.get("front_score", 0),
-                    edge_result.final_score,
-                    surface_result.details.get("front_score", 0),
-                    surface_result.final_score,
-                )
-
-            except Exception as e:
-                logger.warning("Back-side grading failed, using front-only: %s", e)
-
-        # Apply noise filtering
-        classified_defects = self.defect_classifier.apply_noise_threshold(classified_defects)
-
-        # Filter defects against reference image (suppress artwork false positives)
-        if reference_image_path:
-            try:
-                ref_image = await asyncio.to_thread(self._load_image, reference_image_path)
-                classified_defects = await asyncio.to_thread(
-                    self._filter_with_reference, image, ref_image, classified_defects,
-                )
-            except Exception as e:
-                logger.warning("Reference comparison failed, grading without it: %s", e)
-
-        # SOP calibration: confidence-based severity capping
-        classified_defects = self._apply_confidence_caps(classified_defects)
-
-        # SOP calibration: halve penalties for manufacturing defects
-        classified_defects = self._apply_manufacturing_discount(classified_defects)
-
-        # SOP calibration: aggregate same-type defects in same zone
-        classified_defects = self._aggregate_same_zone_defects(classified_defects)
-
-        # B3: Apply location-weighted defect scoring based on card zones
-        h, w = image.shape[:2]
-        classified_defects = self._apply_zone_weights(classified_defects, w, h)
-
-        # Compute grading confidence score
-        grading_confidence = self._compute_grading_confidence(
-            classified_defects, centering_result,
-            reference_used=(reference_image_path is not None),
-        )
-
-        # Get real defects (not noise)
-        real_defects = [d for d in classified_defects if not d.is_noise]
-
-        # Determine hard cap from defects
-        defect_cap = self.defect_classifier.get_cap_for_defects(real_defects)
-
-        # SOP calibration: centering grade cap (Section 7)
-        centering_cap = get_centering_cap(
-            centering_result.lr_percentage, centering_result.tb_percentage,
-        )
-        # Use the more restrictive of defect cap and centering cap
-        effective_cap = defect_cap
-        if effective_cap is None:
-            effective_cap = centering_cap
-        else:
-            effective_cap = min(effective_cap, centering_cap)
-
-        # Calculate weighted score
-        raw_score = self.grade_calculator.calculate_weighted_score(
-            centering=centering_result.final_score,
-            corners=corner_result.final_score,
-            edges=edge_result.final_score,
-            surface=surface_result.final_score,
-        )
-
-        # SOP calibration: eye appeal adjustment
-        raw_score = self._apply_eye_appeal(raw_score, classified_defects)
-
-        # Apply caps and round
-        capped_score, caps_applied = self.grade_calculator.apply_caps(raw_score, effective_cap)
-        final_grade = self.grade_calculator.round_to_half(capped_score)
-
-        # Build GradeResult
-        grade_result = GradeResult(
-            sub_scores={
-                "centering": centering_result.final_score,
-                "corners": corner_result.final_score,
-                "edges": edge_result.final_score,
-                "surface": surface_result.final_score,
-            },
-            raw_score=round(raw_score, 2),
-            caps_applied=caps_applied,
-            final_grade=final_grade,
-            details={
-                "weights": self.grade_calculator.weights,
-                "defect_cap": defect_cap,
-                "centering_cap": centering_cap,
-            },
-        )
-
-        # Build complete result
-        result = {
-            "centering": {
-                "score": centering_result.final_score,
-                "lr_ratio": centering_result.lr_ratio,
-                "tb_ratio": centering_result.tb_ratio,
-                "lr_score": centering_result.lr_score,
-                "tb_score": centering_result.tb_score,
-                "details": centering_result.details,
-            },
-            "corners": {
-                "score": corner_result.final_score,
-                "per_corner": corner_result.scores,
-                "defect_count": len(corner_result.defects),
-                "front_score": corner_result.details.get("front_score"),
-                "back_score": corner_result.details.get("back_score"),
-            },
-            "edges": {
-                "score": edge_result.final_score,
-                "per_edge": edge_result.scores,
-                "defect_count": len(edge_result.defects),
-                "front_score": edge_result.details.get("front_score"),
-                "back_score": edge_result.details.get("back_score"),
-            },
-            "surface": {
-                "score": surface_result.final_score,
-                "defect_count": len(surface_result.defects),
-                "front_score": surface_result.details.get("front_score"),
-                "back_score": surface_result.details.get("back_score"),
-            },
-            "sub_scores": grade_result.sub_scores,
-            "raw_score": grade_result.raw_score,
-            "caps_applied": grade_result.caps_applied,
-            "final_grade": grade_result.final_grade,
-            "defect_cap": defect_cap,
-            "sensitivity_profile": self.profile.name,
-            "is_holo_detected": is_holo_detected,
-            "holo_score": round(holo_score, 2),
-            "back_graded": back_image_path is not None and back_corner_result is not None,
-            "defects": [
-                {
-                    "category": d.category,
-                    "defect_type": d.defect_type,
-                    "severity": d.severity,
-                    "location": d.location,
-                    "score_impact": d.score_impact,
-                    "hard_cap": d.hard_cap,
-                    "bbox": {"x": d.bbox_x, "y": d.bbox_y, "w": d.bbox_w, "h": d.bbox_h},
-                    "confidence": d.confidence,
-                    "is_noise": d.is_noise,
-                    "details": d.details,
-                    "zone": d.details.get("zone", "general") if isinstance(d.details, dict) else "general",
-                    "zone_weight": d.details.get("zone_weight", 1.0) if isinstance(d.details, dict) else 1.0,
-                    "side": d.details.get("side", "front") if isinstance(d.details, dict) else "front",
-                }
-                for d in classified_defects
-            ],
-            "defect_count": len(real_defects),
-            "grading_confidence": grading_confidence,
-        }
-
-        # ── AI Vision Grading (primary method) ────────────────────────────
-        # AI vision is the primary grading method. OpenCV centering data is
-        # kept for the centering overlay but all scores come from AI.
-        # Falls back to OpenCV only if AI is unavailable.
+        # ── P5: Try AI Vision Grading first to skip expensive OpenCV work ──
+        # AI vision is the primary grading method. We only need OpenCV
+        # centering data (border measurements) for the overlay; all scores
+        # come from AI. Fall back to full OpenCV only if AI is unavailable.
+        ai_result = None
         try:
             from app.services.ai.vision_grader import grade_card_with_vision
-            card_info = None
             ai_result = await grade_card_with_vision(
                 image_path=card_image_path,
-                card_info=card_info,
+                card_info=None,
                 back_image_path=back_image_path,
             )
-            if ai_result:
-                # Keep OpenCV centering measurements (border pixels) for overlay
-                # but replace all scores with AI vision scores
-                result["corners"]["score"] = ai_result.corners_score
-                result["edges"]["score"] = ai_result.edges_score
-                result["surface"]["score"] = ai_result.surface_score
-                # Use AI centering score but keep OpenCV border measurements
-                result["centering"]["score"] = ai_result.centering_score
-                result["sub_scores"] = {
+        except Exception as e:
+            logger.warning("AI vision grading failed, falling back to OpenCV: %s", e)
+
+        if ai_result:
+            # ── AI succeeded: only run centering for overlay data ──────────
+            # Extract borders for centering overlay (lightweight compared to
+            # running all four analyzers + defect classification)
+            _regions, borders = await asyncio.to_thread(self._extract_regions_and_borders, image)
+            centering_result = await asyncio.to_thread(self.centering_analyzer.analyze, borders)
+
+            img_h, img_w = image.shape[:2]
+            result = {
+                "centering": {
+                    "score": ai_result.centering_score,
+                    "lr_ratio": centering_result.lr_ratio,
+                    "tb_ratio": centering_result.tb_ratio,
+                    "lr_score": centering_result.lr_score,
+                    "tb_score": centering_result.tb_score,
+                    "details": centering_result.details,
+                },
+                "corners": {
+                    "score": ai_result.corners_score,
+                    "per_corner": {},
+                    "defect_count": len([d for d in ai_result.defects if d.category == "corners"]),
+                    "front_score": None,
+                    "back_score": None,
+                },
+                "edges": {
+                    "score": ai_result.edges_score,
+                    "per_edge": {},
+                    "defect_count": len([d for d in ai_result.defects if d.category == "edges"]),
+                    "front_score": None,
+                    "back_score": None,
+                },
+                "surface": {
+                    "score": ai_result.surface_score,
+                    "defect_count": len([d for d in ai_result.defects if d.category == "surface"]),
+                    "front_score": None,
+                    "back_score": None,
+                },
+                "sub_scores": {
                     "centering": ai_result.centering_score,
                     "corners": ai_result.corners_score,
                     "edges": ai_result.edges_score,
                     "surface": ai_result.surface_score,
-                }
-                result["raw_score"] = ai_result.raw_score
-                result["final_grade"] = ai_result.final_grade
-                result["grading_confidence"] = ai_result.confidence * 100
-                result["grade_explanation"] = ai_result.grade_explanation
-                result["grading_method"] = "ai_vision"
-                result["ai_model"] = ai_result.model_used
-                # Clear OpenCV caps — AI grade is self-contained
-                result["caps_applied"] = None
-                result["defect_cap"] = None
-
-                # Replace defects with AI-detected defects
-                # Map text locations to approximate bounding boxes on the card image
-                img_w = image.shape[1] if image is not None else 750
-                img_h = image.shape[0] if image is not None else 1050
-                result["defects"] = [
+                },
+                "raw_score": ai_result.raw_score,
+                "caps_applied": None,
+                "final_grade": ai_result.final_grade,
+                "defect_cap": None,
+                "sensitivity_profile": self.profile.name,
+                "is_holo_detected": is_holo_detected,
+                "holo_score": round(holo_score, 2),
+                "back_graded": back_image_path is not None,
+                "defects": [
                     {
                         "category": d.category,
                         "defect_type": d.defect_type,
@@ -526,16 +297,276 @@ class GradingEngine:
                         "side": "front",
                     }
                     for d in ai_result.defects
-                ]
-                result["defect_count"] = len(ai_result.defects)
+                ],
+                "defect_count": len(ai_result.defects),
+                "grading_confidence": ai_result.confidence * 100,
+                "grade_explanation": ai_result.grade_explanation,
+                "grading_method": "ai_vision",
+                "ai_model": ai_result.model_used,
+            }
 
-                logger.info("AI vision grade: %.1f (%d defects)", ai_result.final_grade, len(ai_result.defects))
+            logger.info("AI vision grade: %.1f (%d defects)", ai_result.final_grade, len(ai_result.defects))
+
+        else:
+            # ── AI unavailable: full OpenCV grading pipeline ───────────────
+            if ai_result is None:
+                logger.warning("AI vision unavailable, falling back to OpenCV grading")
+
+            # Extract regions and measure borders (CPU-intensive)
+            regions, borders = await asyncio.to_thread(self._extract_regions_and_borders, image)
+
+            # Run all four analyzers concurrently via thread pool
+            centering_result, corner_result, edge_result, surface_result = await asyncio.gather(
+                asyncio.to_thread(self.centering_analyzer.analyze, borders),
+                asyncio.to_thread(
+                    self.corner_analyzer.analyze,
+                    [regions.corner_tl, regions.corner_tr, regions.corner_br, regions.corner_bl],
+                ),
+                asyncio.to_thread(
+                    self.edge_analyzer.analyze,
+                    [regions.edge_top, regions.edge_bottom, regions.edge_left, regions.edge_right],
+                ),
+                asyncio.to_thread(self.surface_analyzer.analyze, regions.surface),
+            )
+
+            # Collect and classify all front-side defects
+            classified_defects = self._classify_all_defects(
+                corner_result, edge_result, surface_result, image,
+            )
+            # Tag all front defects with side="front"
+            for d in classified_defects:
+                if isinstance(d.details, dict):
+                    d.details["side"] = "front"
+                else:
+                    d.details = {"side": "front"}
+
+            # ----------------------------------------------------------------
+            # B1: Back-side grading (corners, edges, surface — no centering)
+            # ----------------------------------------------------------------
+            back_corner_result = None
+            back_edge_result = None
+            back_surface_result = None
+
+            if back_image_path:
+                try:
+                    back_image = await asyncio.to_thread(self._load_image, back_image_path)
+                    back_regions, _back_borders = await asyncio.to_thread(
+                        self._extract_regions_and_borders, back_image,
+                    )
+
+                    # Run corners, edges, surface analysers on back image (no centering)
+                    back_corner_result, back_edge_result, back_surface_result = await asyncio.gather(
+                        asyncio.to_thread(
+                            self.corner_analyzer.analyze,
+                            [back_regions.corner_tl, back_regions.corner_tr,
+                             back_regions.corner_br, back_regions.corner_bl],
+                        ),
+                        asyncio.to_thread(
+                            self.edge_analyzer.analyze,
+                            [back_regions.edge_top, back_regions.edge_bottom,
+                             back_regions.edge_left, back_regions.edge_right],
+                        ),
+                        asyncio.to_thread(self.surface_analyzer.analyze, back_regions.surface),
+                    )
+
+                    # Classify back-side defects and tag with side="back"
+                    back_defects = self._classify_all_defects(
+                        back_corner_result, back_edge_result, back_surface_result, back_image,
+                    )
+                    for d in back_defects:
+                        if isinstance(d.details, dict):
+                            d.details["side"] = "back"
+                        else:
+                            d.details = {"side": "back"}
+
+                    classified_defects.extend(back_defects)
+
+                    # Combine front/back sub-scores: use the WORSE score
+                    # for corners, edges, surface. Centering stays front-only.
+                    corner_result = CornerResult(
+                        scores=corner_result.scores,
+                        defects=corner_result.defects + back_corner_result.defects,
+                        final_score=min(corner_result.final_score, back_corner_result.final_score),
+                        details={
+                            "front_score": corner_result.final_score,
+                            "back_score": back_corner_result.final_score,
+                        },
+                    )
+                    edge_result = EdgeResult(
+                        scores=edge_result.scores,
+                        defects=edge_result.defects + back_edge_result.defects,
+                        final_score=min(edge_result.final_score, back_edge_result.final_score),
+                        details={
+                            "front_score": edge_result.final_score,
+                            "back_score": back_edge_result.final_score,
+                        },
+                    )
+                    surface_result = SurfaceResult(
+                        defects=surface_result.defects + back_surface_result.defects,
+                        final_score=min(surface_result.final_score, back_surface_result.final_score),
+                        details={
+                            "front_score": surface_result.final_score,
+                            "back_score": back_surface_result.final_score,
+                        },
+                    )
+
+                    logger.info(
+                        "Back-side grading applied: corners=%.1f(f)→%.1f(min), "
+                        "edges=%.1f(f)→%.1f(min), surface=%.1f(f)→%.1f(min)",
+                        corner_result.details.get("front_score", 0),
+                        corner_result.final_score,
+                        edge_result.details.get("front_score", 0),
+                        edge_result.final_score,
+                        surface_result.details.get("front_score", 0),
+                        surface_result.final_score,
+                    )
+
+                except Exception as e:
+                    logger.warning("Back-side grading failed, using front-only: %s", e)
+
+            # Apply noise filtering
+            classified_defects = self.defect_classifier.apply_noise_threshold(classified_defects)
+
+            # Filter defects against reference image (suppress artwork false positives)
+            if reference_image_path:
+                try:
+                    ref_image = await asyncio.to_thread(self._load_image, reference_image_path)
+                    classified_defects = await asyncio.to_thread(
+                        self._filter_with_reference, image, ref_image, classified_defects,
+                    )
+                except Exception as e:
+                    logger.warning("Reference comparison failed, grading without it: %s", e)
+
+            # SOP calibration: confidence-based severity capping
+            classified_defects = self._apply_confidence_caps(classified_defects)
+
+            # SOP calibration: halve penalties for manufacturing defects
+            classified_defects = self._apply_manufacturing_discount(classified_defects)
+
+            # SOP calibration: aggregate same-type defects in same zone
+            classified_defects = self._aggregate_same_zone_defects(classified_defects)
+
+            # B3: Apply location-weighted defect scoring based on card zones
+            h, w = image.shape[:2]
+            classified_defects = self._apply_zone_weights(classified_defects, w, h)
+
+            # Compute grading confidence score
+            grading_confidence = self._compute_grading_confidence(
+                classified_defects, centering_result,
+                reference_used=(reference_image_path is not None),
+            )
+
+            # Get real defects (not noise)
+            real_defects = [d for d in classified_defects if not d.is_noise]
+
+            # Determine hard cap from defects
+            defect_cap = self.defect_classifier.get_cap_for_defects(real_defects)
+
+            # SOP calibration: centering grade cap (Section 7)
+            centering_cap = get_centering_cap(
+                centering_result.lr_percentage, centering_result.tb_percentage,
+            )
+            # Use the more restrictive of defect cap and centering cap
+            effective_cap = defect_cap
+            if effective_cap is None:
+                effective_cap = centering_cap
             else:
-                result["grading_method"] = "opencv_fallback"
-                logger.warning("AI vision unavailable, falling back to OpenCV: %.1f", result["final_grade"])
-        except Exception as e:
-            result["grading_method"] = "opencv_fallback"
-            logger.warning("AI vision grading failed, falling back to OpenCV: %s", e)
+                effective_cap = min(effective_cap, centering_cap)
+
+            # Calculate weighted score
+            raw_score = self.grade_calculator.calculate_weighted_score(
+                centering=centering_result.final_score,
+                corners=corner_result.final_score,
+                edges=edge_result.final_score,
+                surface=surface_result.final_score,
+            )
+
+            # SOP calibration: eye appeal adjustment
+            raw_score = self._apply_eye_appeal(raw_score, classified_defects)
+
+            # Apply caps and round
+            capped_score, caps_applied = self.grade_calculator.apply_caps(raw_score, effective_cap)
+            final_grade = self.grade_calculator.round_to_half(capped_score)
+
+            # Build GradeResult
+            grade_result = GradeResult(
+                sub_scores={
+                    "centering": centering_result.final_score,
+                    "corners": corner_result.final_score,
+                    "edges": edge_result.final_score,
+                    "surface": surface_result.final_score,
+                },
+                raw_score=round(raw_score, 2),
+                caps_applied=caps_applied,
+                final_grade=final_grade,
+                details={
+                    "weights": self.grade_calculator.weights,
+                    "defect_cap": defect_cap,
+                    "centering_cap": centering_cap,
+                },
+            )
+
+            # Build complete result
+            result = {
+                "centering": {
+                    "score": centering_result.final_score,
+                    "lr_ratio": centering_result.lr_ratio,
+                    "tb_ratio": centering_result.tb_ratio,
+                    "lr_score": centering_result.lr_score,
+                    "tb_score": centering_result.tb_score,
+                    "details": centering_result.details,
+                },
+                "corners": {
+                    "score": corner_result.final_score,
+                    "per_corner": corner_result.scores,
+                    "defect_count": len(corner_result.defects),
+                    "front_score": corner_result.details.get("front_score"),
+                    "back_score": corner_result.details.get("back_score"),
+                },
+                "edges": {
+                    "score": edge_result.final_score,
+                    "per_edge": edge_result.scores,
+                    "defect_count": len(edge_result.defects),
+                    "front_score": edge_result.details.get("front_score"),
+                    "back_score": edge_result.details.get("back_score"),
+                },
+                "surface": {
+                    "score": surface_result.final_score,
+                    "defect_count": len(surface_result.defects),
+                    "front_score": surface_result.details.get("front_score"),
+                    "back_score": surface_result.details.get("back_score"),
+                },
+                "sub_scores": grade_result.sub_scores,
+                "raw_score": grade_result.raw_score,
+                "caps_applied": grade_result.caps_applied,
+                "final_grade": grade_result.final_grade,
+                "defect_cap": defect_cap,
+                "sensitivity_profile": self.profile.name,
+                "is_holo_detected": is_holo_detected,
+                "holo_score": round(holo_score, 2),
+                "back_graded": back_image_path is not None and back_corner_result is not None,
+                "defects": [
+                    {
+                        "category": d.category,
+                        "defect_type": d.defect_type,
+                        "severity": d.severity,
+                        "location": d.location,
+                        "score_impact": d.score_impact,
+                        "hard_cap": d.hard_cap,
+                        "bbox": {"x": d.bbox_x, "y": d.bbox_y, "w": d.bbox_w, "h": d.bbox_h},
+                        "confidence": d.confidence,
+                        "is_noise": d.is_noise,
+                        "details": d.details,
+                        "zone": d.details.get("zone", "general") if isinstance(d.details, dict) else "general",
+                        "zone_weight": d.details.get("zone_weight", 1.0) if isinstance(d.details, dict) else 1.0,
+                        "side": d.details.get("side", "front") if isinstance(d.details, dict) else "front",
+                    }
+                    for d in classified_defects
+                ],
+                "defect_count": len(real_defects),
+                "grading_confidence": grading_confidence,
+                "grading_method": "opencv_fallback",
+            }
 
         # Publish grade event
         event_bus.publish(Events.GRADE_CALCULATED, {

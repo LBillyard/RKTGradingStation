@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import String, Float, Integer, Text, DateTime, ForeignKey, Boolean, JSON
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base, uuid_pk, created_at_col, updated_at_col
 
@@ -44,6 +44,8 @@ class TrainingGrade(Base):
     operator_name: Mapped[str] = mapped_column(String(100))
     expertise_level: Mapped[str] = mapped_column(String(20), default="standard")
     created_at: Mapped[created_at_col]
+
+    card_record: Mapped["CardRecord"] = relationship(back_populates="training_grades")
 
 
 class CalibrationReport(Base):

@@ -62,6 +62,8 @@ export async function init(container) {
     await loadFilterOptions();
     bindEvents();
     await loadEvents();
+    // Register cleanup so auto-refresh is cleared on page navigation
+    window._pageCleanup.push(() => stopAutoRefresh());
 }
 
 export function destroy() {
@@ -272,9 +274,9 @@ function renderTable(events) {
         return `
             <tr class="audit-row" data-event-id="${e.id}" style="cursor:pointer;">
                 <td class="small">${formatDate(e.created_at)}</td>
-                <td><span class="badge ${bgClass}">${e.event_type}</span></td>
+                <td><span class="badge ${bgClass}">${escapeHtml(e.event_type)}</span></td>
                 <td class="small">${entityLink}</td>
-                <td class="small">${e.operator || '--'}</td>
+                <td class="small">${escapeHtml(e.operator || '--')}</td>
                 <td class="small text-muted">${escapeHtml(detailStr)}</td>
             </tr>`;
     }).join('');

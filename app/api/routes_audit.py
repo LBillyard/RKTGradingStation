@@ -189,12 +189,20 @@ async def list_operators(db: Session = Depends(get_db)):
 # POST /api/audit/export
 # ------------------------------------------------------------------
 
+_EXPORT_BATCH_SIZE = 500
+
+
 @router.post("/export")
 async def export_audit_csv(
     body: ExportRequest,
     db: Session = Depends(get_db),
 ):
-    """Export filtered audit events as a CSV file download."""
+    """Export filtered audit events as a streaming CSV file download.
+
+    Reads rows in batches to avoid loading all rows into memory at once.
+    """
+    import json
+
     stmt = _build_query(
         body.event_type,
         body.entity_type,
@@ -203,32 +211,46 @@ async def export_audit_csv(
         body.date_end,
     ).order_by(AuditEvent.created_at.desc())
 
-    events = db.execute(stmt).scalars().all()
-
-    # Build CSV in memory
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow([
-        "ID", "Timestamp", "Event Type", "Entity Type", "Entity ID",
-        "Operator", "Action", "Details",
-    ])
-    for e in events:
-        import json
-        details_str = json.dumps(e.details) if e.details else ""
+    def _generate_csv():
+        # Yield CSV header
+        header = io.StringIO()
+        writer = csv.writer(header)
         writer.writerow([
-            e.id,
-            e.created_at.isoformat() if e.created_at else "",
-            e.event_type,
-            e.entity_type or "",
-            e.entity_id or "",
-            e.operator_name or "",
-            e.action,
-            details_str,
+            "ID", "Timestamp", "Event Type", "Entity Type", "Entity ID",
+            "Operator", "Action", "Details",
         ])
+        yield header.getvalue()
 
-    output.seek(0)
+        # Stream rows in batches
+        offset = 0
+        while True:
+            batch_stmt = stmt.offset(offset).limit(_EXPORT_BATCH_SIZE)
+            batch = db.execute(batch_stmt).scalars().all()
+            if not batch:
+                break
+
+            for e in batch:
+                row_buf = io.StringIO()
+                writer = csv.writer(row_buf)
+                details_str = json.dumps(e.details) if e.details else ""
+                writer.writerow([
+                    e.id,
+                    e.created_at.isoformat() if e.created_at else "",
+                    e.event_type,
+                    e.entity_type or "",
+                    e.entity_id or "",
+                    e.operator_name or "",
+                    e.action,
+                    details_str,
+                ])
+                yield row_buf.getvalue()
+
+            if len(batch) < _EXPORT_BATCH_SIZE:
+                break
+            offset += _EXPORT_BATCH_SIZE
+
     return StreamingResponse(
-        iter([output.getvalue()]),
+        _generate_csv(),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=audit_events.csv"},
     )

@@ -5,15 +5,75 @@ and are only registered when RKT_MODE is 'agent' or 'desktop'.
 """
 
 import asyncio
+import ipaddress
 import logging
+import socket
 import tempfile
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.config import settings
+
+
+# ---- Security helpers ----
+
+_BLOCKED_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("::1/128"),
+]
+
+
+def _validate_url_safe(url: str) -> str:
+    """Validate a URL is safe to fetch (no SSRF to internal networks).
+
+    Returns the validated URL. Raises HTTPException(400) if blocked.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(400, f"URL scheme '{parsed.scheme}' not allowed; only http/https")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise HTTPException(400, "URL has no hostname")
+
+    # Resolve hostname and check all IPs
+    try:
+        addr_infos = socket.getaddrinfo(hostname, parsed.port or 443, proto=socket.IPPROTO_TCP)
+    except socket.gaierror:
+        raise HTTPException(400, f"Cannot resolve hostname: {hostname}")
+
+    for family, _, _, _, sockaddr in addr_infos:
+        ip = ipaddress.ip_address(sockaddr[0])
+        for network in _BLOCKED_NETWORKS:
+            if ip in network:
+                raise HTTPException(400, "URL resolves to a blocked private/internal IP address")
+
+    return url
+
+
+def _validate_image_path(image_path: str) -> Path:
+    """Validate an image path is within the allowed data directory.
+
+    Returns the resolved Path. Raises HTTPException(400) if invalid.
+    """
+    if ".." in image_path:
+        raise HTTPException(400, "Invalid image path")
+
+    resolved = Path(image_path).resolve()
+    allowed_dir = Path("data").resolve()
+
+    if not resolved.is_relative_to(allowed_dir):
+        raise HTTPException(400, "Invalid image path")
+
+    return resolved
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -375,29 +435,36 @@ async def print_image(req: PrintRequest):
     printer_name = req.printer_name or settings.printer.printer_name
 
     try:
+        # Validate URL before fetching (SSRF protection)
+        _validate_url_safe(req.image_url)
+
         # Download the image to a temp file
         import httpx
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
             resp = await client.get(req.image_url, timeout=30.0)
             resp.raise_for_status()
+
+        # Validate final URL after redirects (SSRF protection)
+        _validate_url_safe(str(resp.url))
 
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
             tmp.write(resp.content)
             tmp_path = tmp.name
 
         # Print it
-        result = await asyncio.to_thread(
-            printer.print_image,
-            image_path=tmp_path,
-            printer_name=printer_name or "default",
-            width_mm=width,
-            height_mm=height,
-            dpi=settings.printer.dpi,
-        )
-
-        # Clean up temp file
-        Path(tmp_path).unlink(missing_ok=True)
+        try:
+            result = await asyncio.to_thread(
+                printer.print_image,
+                image_path=tmp_path,
+                printer_name=printer_name or "default",
+                width_mm=width,
+                height_mm=height,
+                dpi=settings.printer.dpi,
+            )
+        finally:
+            # Clean up temp file even if print_image throws
+            Path(tmp_path).unlink(missing_ok=True)
 
         return {
             "status": result.status,
@@ -429,8 +496,10 @@ async def detect_nfc_tag():
         info = await asyncio.to_thread(nfc.connect, settings.nfc.reader_name)
         if not info.is_connected:
             return {"detected": False, "error": "No NFC reader connected"}
-        tag_info = await asyncio.to_thread(nfc.detect_tag)
-        nfc.disconnect()
+        try:
+            tag_info = await asyncio.to_thread(nfc.detect_tag)
+        finally:
+            nfc.disconnect()
 
     if tag_info:
         return {"detected": True, "uid": tag_info.uid, "tag_type": tag_info.tag_type}
@@ -453,21 +522,23 @@ async def program_nfc_tag(req: NfcProgramRequest):
             if not info.is_connected:
                 raise RuntimeError("No NFC reader connected")
 
-            if req.tag_type == "ntag424_dna":
-                from app.services.nfc.ntag424 import program_sdm
-                master_key = bytes.fromhex(req.master_key or settings.nfc_master_key)
-                sdm_file_key = bytes.fromhex(req.sdm_file_read_key or settings.nfc_sdm_file_read_key)
-                sdm_meta_key = bytes.fromhex(req.sdm_meta_read_key or settings.nfc_sdm_meta_read_key)
-                result = await asyncio.to_thread(
-                    program_sdm, nfc, req.serial_number, req.base_url,
-                    master_key, sdm_file_key, sdm_meta_key,
-                )
-            else:
-                from app.services.nfc.ntag213 import program_url
-                result = await asyncio.to_thread(
-                    program_url, nfc, req.serial_number, req.base_url,
-                )
-            nfc.disconnect()
+            try:
+                if req.tag_type == "ntag424_dna":
+                    from app.services.nfc.ntag424 import program_sdm
+                    master_key = bytes.fromhex(req.master_key or settings.nfc_master_key)
+                    sdm_file_key = bytes.fromhex(req.sdm_file_read_key or settings.nfc_sdm_file_read_key)
+                    sdm_meta_key = bytes.fromhex(req.sdm_meta_read_key or settings.nfc_sdm_meta_read_key)
+                    result = await asyncio.to_thread(
+                        program_sdm, nfc, req.serial_number, req.base_url,
+                        master_key, sdm_file_key, sdm_meta_key,
+                    )
+                else:
+                    from app.services.nfc.ntag213 import program_url
+                    result = await asyncio.to_thread(
+                        program_url, nfc, req.serial_number, req.base_url,
+                    )
+            finally:
+                nfc.disconnect()
 
         return {
             "status": result.status,
@@ -559,7 +630,8 @@ async def check_scan_quality(image_path: str = ""):
         # Use the most recent scan if no path provided
         return {"error": "Provide image_path parameter"}
 
-    quality = await asyncio.to_thread(analyze_scan_quality, image_path)
+    validated_path = _validate_image_path(image_path)
+    quality = await asyncio.to_thread(analyze_scan_quality, str(validated_path))
     record_scan_quality(
         brightness=quality["brightness"],
         contrast=quality["contrast"],
@@ -576,7 +648,8 @@ async def calibration_check(image_path: str):
     from app.services.agent.image_security import analyze_scan_quality
     from app.services.agent.telemetry import record_scan_quality
 
-    quality = await asyncio.to_thread(analyze_scan_quality, image_path)
+    validated_path = _validate_image_path(image_path)
+    quality = await asyncio.to_thread(analyze_scan_quality, str(validated_path))
     record_scan_quality(
         brightness=quality["brightness"],
         contrast=quality["contrast"],
@@ -596,7 +669,8 @@ async def hash_scanned_image(image_path: str, operator_name: str = ""):
     from app.services.agent.image_security import hash_image, sign_image
     from app.services.agent.telemetry import log_custody_event
 
-    img_hash = await asyncio.to_thread(hash_image, image_path)
+    validated_path = _validate_image_path(image_path)
+    img_hash = await asyncio.to_thread(hash_image, str(validated_path))
     signed = sign_image(img_hash, settings.station_id, operator_name)
 
     # Log custody event
@@ -617,6 +691,7 @@ async def verify_image(image_path: str, original_hash: str, signature: str,
     """Verify image integrity against a signed record."""
     from app.services.agent.image_security import verify_image_integrity
 
+    validated_path = _validate_image_path(image_path)
     signed_record = {
         "image_hash": original_hash,
         "station_id": station_id,
@@ -624,7 +699,7 @@ async def verify_image(image_path: str, original_hash: str, signature: str,
         "timestamp": timestamp,
         "signature": signature,
     }
-    result = await asyncio.to_thread(verify_image_integrity, image_path, signed_record)
+    result = await asyncio.to_thread(verify_image_integrity, str(validated_path), signed_record)
     return result
 
 
@@ -665,7 +740,7 @@ async def get_pending_cache():
 async def sync_to_cloud():
     """Manually trigger sync of cached items to the cloud."""
     from app.services.agent.telemetry import sync_cached_items
-    result = sync_cached_items(settings.nfc.verify_base_url.rsplit("/", 1)[0])
+    result = await asyncio.to_thread(sync_cached_items, settings.nfc.verify_base_url.rsplit("/", 1)[0])
     return result
 
 

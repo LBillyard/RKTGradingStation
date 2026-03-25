@@ -3,7 +3,7 @@
  * and threshold calibration recommendations.
  */
 import { api } from '../api.js';
-import { showToast } from '../components.js';
+import { showToast, escapeHtml } from '../components.js';
 
 export async function init(container) {
     container.innerHTML = `
@@ -133,7 +133,7 @@ async function loadDashboard() {
         await loadHistory();
 
     } catch (e) {
-        content.innerHTML = `<div class="alert alert-warning">${e.message}</div>`;
+        content.innerHTML = `<div class="alert alert-warning">${escapeHtml(e.message)}</div>`;
     }
 }
 
@@ -205,7 +205,7 @@ async function generateReport() {
                 showToast('Calibration applied!', 'success');
                 await loadHistory();
             } catch (e) {
-                document.getElementById('apply-status').innerHTML = `<div class="alert alert-danger py-2 small">${e.message}</div>`;
+                document.getElementById('apply-status').innerHTML = `<div class="alert alert-danger py-2 small">${escapeHtml(e.message)}</div>`;
                 btn.disabled = false;
                 btn.innerHTML = '<i class="bi bi-check2-all me-1"></i>Apply Calibration';
             }
@@ -214,7 +214,7 @@ async function generateReport() {
         await loadHistory();
 
     } catch (e) {
-        area.innerHTML = `<div class="alert alert-danger py-2 small">${e.message}</div>`;
+        area.innerHTML = `<div class="alert alert-danger py-2 small">${escapeHtml(e.message)}</div>`;
     }
 }
 

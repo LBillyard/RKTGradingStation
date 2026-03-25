@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, DateTime, ForeignKey, Boolean, Text
+from sqlalchemy import String, DateTime, ForeignKey, Boolean, Text, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base, uuid_pk, created_at_col
@@ -12,6 +12,9 @@ from app.db.database import Base, uuid_pk, created_at_col
 class ReferenceCard(Base):
     """Approved reference card for comparison."""
     __tablename__ = "reference_cards"
+    __table_args__ = (
+        Index("idx_reference_cards_pokewallet_card_id", "pokewallet_card_id"),
+    )
 
     id: Mapped[uuid_pk]
     pokewallet_card_id: Mapped[Optional[str]] = mapped_column(String(100))
@@ -32,6 +35,9 @@ class ReferenceCard(Base):
 class ReferenceImage(Base):
     """Reference image for a card (front or back)."""
     __tablename__ = "reference_images"
+    __table_args__ = (
+        Index("idx_reference_images_reference_card_id", "reference_card_id"),
+    )
 
     id: Mapped[uuid_pk]
     reference_card_id: Mapped[str] = mapped_column(String(36), ForeignKey("reference_cards.id"))

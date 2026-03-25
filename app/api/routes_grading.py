@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.db.database import get_db
 from app.utils.validation import VALID_GRADES, validate_grade
@@ -133,18 +133,20 @@ async def get_grade_decision(card_id: str, db: Session = Depends(get_db)):
     from app.models.grading import GradeDecision, DefectFinding
     from app.models.card import CardRecord
 
-    decision = db.query(GradeDecision).filter(
-        GradeDecision.card_record_id == card_id
-    ).first()
-    if not decision:
+    # Single joined query for decision + card (avoids N+1)
+    row = (
+        db.query(GradeDecision, CardRecord)
+        .outerjoin(CardRecord, CardRecord.id == GradeDecision.card_record_id)
+        .filter(GradeDecision.card_record_id == card_id)
+        .first()
+    )
+    if not row:
         raise HTTPException(status_code=404, detail="Grade decision not found")
+    decision, card = row
 
     defects = db.query(DefectFinding).filter(
         DefectFinding.card_record_id == card_id
     ).all()
-
-    # Get card record for image paths and language
-    card = db.query(CardRecord).filter(CardRecord.id == card_id).first()
 
     return {
         "id": decision.id,

@@ -147,6 +147,28 @@ async def apply_calibration(req: ApplyCalibrationRequest, db: Session = Depends(
         raise HTTPException(400, str(e))
 
 
+@router.delete("/{grade_id}")
+async def delete_training_grade(grade_id: str, db: Session = Depends(get_db)):
+    """Delete a training grade entry."""
+    from app.models.training import TrainingGrade
+
+    grade = db.query(TrainingGrade).filter(TrainingGrade.id == grade_id).first()
+    if not grade:
+        raise HTTPException(404, "Training grade not found")
+    db.delete(grade)
+    db.commit()
+
+    # Auto-update grading brain after deletion
+    try:
+        from app.services.training.service import update_grading_brain
+        update_grading_brain(db)
+    except Exception:
+        pass
+
+    logger.info("Deleted training grade %s", grade_id)
+    return {"status": "deleted", "id": grade_id}
+
+
 @router.get("/trend")
 async def training_trend(window_days: int = 90, db: Session = Depends(get_db)):
     """Get trend data for training accuracy over time."""

@@ -3,6 +3,7 @@
  * Design inspired by panel-style changelog with collapsible category groups.
  */
 import { api } from '../api.js';
+import { escapeHtml } from '../components.js';
 
 const CATEGORIES = {
     feature:     { label: 'Features',      color: '#22c55e', bg: 'rgba(34,197,94,0.1)' },
@@ -73,7 +74,7 @@ export async function init(container) {
                         </div>
                         <div class="collapse" id="${groupId}">
                             <ul class="cl-change-list">
-                                ${items.map(desc => `<li>${desc}</li>`).join('')}
+                                ${items.map(desc => `<li>${escapeHtml(desc)}</li>`).join('')}
                             </ul>
                         </div>
                     </div>`;
@@ -82,9 +83,9 @@ export async function init(container) {
             return `
                 <div class="cl-release ${idx < changelog.length - 1 ? 'cl-release-border' : ''}">
                     <div class="d-flex align-items-center gap-2 mb-2">
-                        <span class="cl-version-badge">v${release.version}</span>
-                        <span class="text-muted small">${release.date}</span>
-                        <span class="fw-medium">${release.title}</span>
+                        <span class="cl-version-badge">v${escapeHtml(release.version)}</span>
+                        <span class="text-muted small">${escapeHtml(release.date)}</span>
+                        <span class="fw-medium">${escapeHtml(release.title)}</span>
                         ${idx === 0 ? '<span class="badge bg-primary ms-auto" style="font-size:0.65rem;">LATEST</span>' : ''}
                     </div>
                     ${groupsHtml}
@@ -102,7 +103,7 @@ export async function init(container) {
 
     } catch (e) {
         document.getElementById('changelog-content').innerHTML =
-            `<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>Could not load changelog: ${e.message}</div>`;
+            `<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>Could not load changelog: ${escapeHtml(e.message)}</div>`;
     }
 }
 

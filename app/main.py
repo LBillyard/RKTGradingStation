@@ -51,8 +51,8 @@ def main() -> None:
 
     # Agent mode: different port, no pywebview
     if settings.mode == "agent":
-        logger.info("Agent mode — starting hardware agent on 0.0.0.0:8742")
-        start_server(8742, host="0.0.0.0")
+        logger.info("Agent mode — starting hardware agent on 127.0.0.1:8742")
+        start_server(8742, host="127.0.0.1")
         return
 
     # Desktop mode: server in background thread, pywebview in foreground

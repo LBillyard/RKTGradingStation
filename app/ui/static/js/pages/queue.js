@@ -5,7 +5,7 @@
  * Supports search, grade filtering, sorting, and click-to-review.
  */
 import { api } from '../api.js';
-import { createEmptyState, createGradeBadge, createStatusBadge } from '../components.js';
+import { createEmptyState, createGradeBadge, createStatusBadge, escapeHtml } from '../components.js';
 import { showToast } from '../components.js';
 
 // ----- Module state -----
@@ -160,7 +160,7 @@ async function loadCards() {
         updatePagination();
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="7">
-            <div class="alert alert-danger m-3">${err.message}</div>
+            <div class="alert alert-danger m-3">${escapeHtml(err.message)}</div>
         </td></tr>`;
     }
 }
@@ -199,18 +199,18 @@ function renderTable(cards) {
             : '--';
 
         const serial = c.serial_number
-            ? `<code class="small">${c.serial_number.substring(0, 12)}</code>`
+            ? `<code class="small">${escapeHtml(c.serial_number.substring(0, 12))}</code>`
             : '<span class="text-muted">--</span>';
 
         return `
             <tr class="gc-row" data-card-id="${c.id}" style="cursor:pointer;">
                 <td class="ps-3">${thumbHtml}</td>
                 <td>
-                    <div class="fw-semibold">${c.card_name || 'Unknown Card'}</div>
-                    ${c.collector_number ? `<span class="text-muted small">#${c.collector_number}</span>` : ''}
-                    ${c.rarity ? `<span class="text-muted small ms-1">${c.rarity}</span>` : ''}
+                    <div class="fw-semibold">${escapeHtml(c.card_name || 'Unknown Card')}</div>
+                    ${c.collector_number ? `<span class="text-muted small">#${escapeHtml(c.collector_number)}</span>` : ''}
+                    ${c.rarity ? `<span class="text-muted small ms-1">${escapeHtml(c.rarity)}</span>` : ''}
                 </td>
-                <td class="small">${c.set_name || '--'}</td>
+                <td class="small">${escapeHtml(c.set_name || '--')}</td>
                 <td class="text-center">${gradeBadge}</td>
                 <td class="text-center">${statusBadge}</td>
                 <td>${serial}</td>

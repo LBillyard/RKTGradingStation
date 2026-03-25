@@ -14,6 +14,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _escape_like(s: str) -> str:
+    """Escape LIKE wildcards to prevent injection of % and _ characters."""
+    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _to_data_url(abs_path: Optional[str]) -> Optional[str]:
     """Convert an absolute filesystem path to a /data/ relative URL."""
     if not abs_path:
@@ -57,7 +62,7 @@ async def list_queue(
     if status and status != "all":
         query = query.filter(CardRecord.status == status)
     if search:
-        query = query.filter(CardRecord.card_name.ilike(f"%{search}%"))
+        query = query.filter(CardRecord.card_name.ilike(f"%{_escape_like(search)}%", escape="\\"))
     if grade_min is not None:
         query = query.filter(GradeDecision.final_grade >= grade_min)
     if grade_max is not None:

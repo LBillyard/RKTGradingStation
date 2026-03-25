@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import String, Integer, Float, Text, DateTime, ForeignKey, JSON, Boolean, Index
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base, uuid_pk, created_at_col, updated_at_col
 
@@ -34,6 +34,8 @@ class DefectFinding(Base):
     debug_image_path: Mapped[Optional[str]] = mapped_column(String(500))
     details_json: Mapped[Optional[dict]] = mapped_column(JSON)
     created_at: Mapped[created_at_col]
+
+    card_record: Mapped["CardRecord"] = relationship(back_populates="defect_findings")
 
 
 class GradeDecision(Base):
@@ -68,10 +70,15 @@ class GradeDecision(Base):
     created_at: Mapped[created_at_col]
     updated_at: Mapped[updated_at_col]
 
+    card_record: Mapped["CardRecord"] = relationship(back_populates="grade_decisions")
+
 
 class GradeHistory(Base):
     """Historical record of a grading attempt."""
     __tablename__ = "grade_history"
+    __table_args__ = (
+        Index("idx_grade_history_card_record_id", "card_record_id"),
+    )
 
     id: Mapped[uuid_pk]
     card_record_id: Mapped[str] = mapped_column(String(36), ForeignKey("card_records.id"))
@@ -85,3 +92,5 @@ class GradeHistory(Base):
     defect_count: Mapped[int] = mapped_column(Integer, default=0)
     grade_caps_json: Mapped[Optional[dict]] = mapped_column(JSON)
     graded_at: Mapped[created_at_col]
+
+    card_record: Mapped["CardRecord"] = relationship(back_populates="grade_history")

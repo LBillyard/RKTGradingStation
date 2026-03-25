@@ -6,7 +6,12 @@
  * and may optionally export a `destroy()` for cleanup.
  */
 import { api, agent, isCloudMode } from './api.js';
-import { showToast } from './components.js';
+import { showToast, escapeHtml } from './components.js';
+
+// ----------------------------------------------------------- Page cleanup registry
+// Page modules register cleanup callbacks (e.g. clearing intervals) here.
+// The router runs them all before loading the next page.
+window._pageCleanup = [];
 
 // ---------------------------------------------------------------- Routes
 const routes = {
@@ -88,6 +93,11 @@ class AppRouter {
         setAppShellVisible(!isLoginPage);
 
         // ---- Teardown previous module ---------------------------------
+        // Run registered page cleanup callbacks (intervals, timeouts, etc.)
+        if (window._pageCleanup.length) {
+            window._pageCleanup.forEach(fn => { try { fn(); } catch (e) { console.warn('Page cleanup error:', e); } });
+            window._pageCleanup = [];
+        }
         if (currentModule?.destroy) {
             try { currentModule.destroy(); } catch (e) { console.warn('Module destroy error:', e); }
         }
@@ -121,7 +131,7 @@ class AppRouter {
             content.innerHTML = `
                 <div class="alert alert-danger m-4">
                     <i class="bi bi-exclamation-triangle me-2"></i>
-                    Failed to load page: ${err.message}
+                    Failed to load page: ${escapeHtml(err.message)}
                 </div>`;
         }
     }

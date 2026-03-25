@@ -5,7 +5,7 @@
  * scanner, grading, authenticity, API, security, and system.
  */
 import { api } from '../api.js';
-import { showToast, createLoadingSpinner, createEmptyState, formatDate } from '../components.js';
+import { showToast, createLoadingSpinner, createEmptyState, formatDate, escapeHtml } from '../components.js';
 
 /* global bootstrap */
 
@@ -109,7 +109,7 @@ async function loadTab(tabId) {
         }
     } catch (err) {
         const pane = _container.querySelector(`#tab-${tabId}`);
-        if (pane) pane.innerHTML = `<div class="alert alert-danger m-3">Failed to load: ${err.message}</div>`;
+        if (pane) pane.innerHTML = `<div class="alert alert-danger m-3">Failed to load: ${escapeHtml(err.message)}</div>`;
     }
 }
 
@@ -591,9 +591,9 @@ async function loadApiTab() {
         result.innerHTML = '';
         try {
             const res = await api.post('/settings/openrouter/test');
-            result.innerHTML = `<div class="alert alert-success py-2 small mb-0"><i class="bi bi-check-circle me-1"></i>Connected! Model: ${res.model}</div>`;
+            result.innerHTML = `<div class="alert alert-success py-2 small mb-0"><i class="bi bi-check-circle me-1"></i>Connected! Model: ${escapeHtml(res.model)}</div>`;
         } catch (err) {
-            result.innerHTML = `<div class="alert alert-danger py-2 small mb-0"><i class="bi bi-x-circle me-1"></i>${err.message}</div>`;
+            result.innerHTML = `<div class="alert alert-danger py-2 small mb-0"><i class="bi bi-x-circle me-1"></i>${escapeHtml(err.message)}</div>`;
         } finally {
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-plug me-1"></i>Test Connection';
@@ -637,7 +637,7 @@ async function loadApiTab() {
             const res = await api.post('/settings/webhook/test');
             result.innerHTML = `<div class="alert alert-success py-2 small mb-0"><i class="bi bi-check-circle me-1"></i>Webhook responded (HTTP ${res.http_status})</div>`;
         } catch (err) {
-            result.innerHTML = `<div class="alert alert-danger py-2 small mb-0"><i class="bi bi-x-circle me-1"></i>${err.message}</div>`;
+            result.innerHTML = `<div class="alert alert-danger py-2 small mb-0"><i class="bi bi-x-circle me-1"></i>${escapeHtml(err.message)}</div>`;
         } finally {
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-plug me-1"></i>Test Webhook';
@@ -1300,7 +1300,7 @@ async function _generateCalibrationMatrix(pane) {
         });
 
     } catch (err) {
-        area.innerHTML = `<div class="alert alert-danger">Failed to generate matrix: ${err.message}</div>`;
+        area.innerHTML = `<div class="alert alert-danger">Failed to generate matrix: ${escapeHtml(err.message)}</div>`;
     }
 }
 
@@ -1893,6 +1893,6 @@ async function loadBackupsList() {
             });
         });
     } catch (err) {
-        container.innerHTML = `<div class="text-center py-3 text-danger small">${err.message}</div>`;
+        container.innerHTML = `<div class="text-center py-3 text-danger small">${escapeHtml(err.message)}</div>`;
     }
 }

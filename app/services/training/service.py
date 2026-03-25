@@ -458,7 +458,7 @@ def _save_overrides(overrides: dict) -> None:
 # ── Grading Brain Auto-Update ─────────────────────────────────────────
 
 BRAIN_PATH = Path("data/grading_brain.md")
-BRAIN_UPDATE_THRESHOLD = 10  # Update brain after every N new training grades
+BRAIN_UPDATE_THRESHOLD = 5  # Update brain after every N new training grades
 
 
 def update_grading_brain(db: Session) -> bool:
