@@ -1,7 +1,7 @@
 """RKT Station Agent — Local hardware bridge for the cloud-hosted grading station.
 
 Runs as a system tray application on Windows PCs with connected hardware
-(scanner, printer, NFC reader). The browser-based UI at rktgradingstation.co.uk
+(scanner, printer, NFC reader). The browser-based UI at rgs.rktgrading.com
 communicates with this agent via localhost:8742 for hardware operations.
 
 Usage:

@@ -273,7 +273,7 @@ def create_app() -> FastAPI:
         async def agent_latest_version():
             return {
                 "latest_version": _AGENT_LATEST,
-                "download_url": "https://rktgradingstation.co.uk/api/agent/download",
+                "download_url": "https://rgs.rktgrading.com/api/agent/download",
                 "release_notes": "Telemetry, scanner quality monitoring, image tamper detection, chain of custody, analytics",
                 "mandatory": False,
             }
