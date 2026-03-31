@@ -34,7 +34,7 @@ from agent_version import AGENT_VERSION, AGENT_NAME, check_for_update, auto_upda
 
 # Globals for tray status
 _server_running = False
-_cloud_url = "https://rktgradingstation.co.uk"
+_cloud_url = "https://rgs.rktgrading.com"
 
 
 def main() -> None:

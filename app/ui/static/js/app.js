@@ -56,6 +56,15 @@ class AppRouter {
     constructor() {
         window.addEventListener('hashchange', () => this.handleRoute());
 
+        // Handle SSO token from URL (redirected from rktgrading.com admin)
+        const urlParams = new URLSearchParams(window.location.search);
+        const ssoToken = urlParams.get('sso_token');
+        if (ssoToken) {
+            localStorage.setItem('rkt-auth-token', ssoToken);
+            // Clean the URL — remove query params and set dashboard hash
+            window.history.replaceState({}, '', window.location.pathname + '#/dashboard');
+        }
+
         // Always start at login if no token, dashboard if token exists
         const token = localStorage.getItem('rkt-auth-token');
         if (!token) {

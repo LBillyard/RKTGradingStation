@@ -272,6 +272,75 @@ class UpdateOperatorRequest(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
+@router.get("/sso")
+async def sso_login(token: str, db: Session = Depends(get_db)):
+    """SSO login from RKT admin dashboard.
+
+    Validates a short-lived JWT signed by rktgrading.com, creates or
+    updates a local Operator record, issues a local session token,
+    and redirects to the UI.
+    """
+    import jwt as pyjwt
+    from app.config import settings
+    from starlette.responses import RedirectResponse
+
+    sso_secret = settings.sso_secret
+    if not sso_secret:
+        raise HTTPException(status_code=503, detail="SSO not configured")
+
+    try:
+        payload = pyjwt.decode(
+            token, sso_secret, algorithms=["HS256"],
+            audience="rgs.rktgrading.com", issuer="rktgrading.com",
+        )
+    except pyjwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="SSO token expired")
+    except pyjwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid SSO token")
+
+    email = payload.get("email")
+    name = payload.get("name")
+    if not email and not name:
+        raise HTTPException(status_code=400, detail="SSO token missing email and name claims")
+
+    # Use email as the unique operator identifier to avoid name collisions
+    sso_name = name or email.split("@")[0]
+    sso_identifier = email or sso_name
+
+    # Map role from JWT — only grant admin if the source role warrants it
+    source_role = payload.get("role", "")
+    local_role = "admin" if source_role in ("ADMIN", "SUPER_ADMIN") else "operator"
+
+    # Find by email-based identifier, or create. Refuse if a local (non-SSO) operator
+    # already has this name to prevent identity hijacking.
+    from app.models.operator import Operator
+    operator = db.query(Operator).filter(Operator.name == sso_identifier).first()
+    if operator and operator.password_hash != "SSO_MANAGED":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Operator '{sso_identifier}' exists as a local account — SSO login refused",
+        )
+    if not operator:
+        operator = Operator(
+            name=sso_identifier,
+            password_hash="SSO_MANAGED",
+            role=local_role,
+            is_active=True,
+        )
+        db.add(operator)
+        db.commit()
+        db.refresh(operator)
+    elif operator.role != local_role:
+        operator.role = local_role
+        db.commit()
+
+    local_token = _make_token(operator.id, operator.name, operator.role)
+    logger.info("SSO login for operator '%s' (email=%s)", sso_identifier, email)
+
+    # Redirect to the UI — the frontend reads sso_token from the URL
+    return RedirectResponse(url=f"/?sso_token={local_token}", status_code=302)
+
+
 @router.post("/login")
 async def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     """Authenticate an operator with username + password."""

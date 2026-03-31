@@ -17,7 +17,7 @@ AGENT_VERSION = "1.4.0"
 AGENT_NAME = "RKT Station Agent"
 
 # Cloud endpoint for version checks
-DEFAULT_UPDATE_URL = "https://rktgradingstation.co.uk/api/agent/version"
+DEFAULT_UPDATE_URL = "https://rgs.rktgrading.com/api/agent/version"
 
 
 def get_version() -> str:

@@ -172,10 +172,12 @@ def create_app() -> FastAPI:
         # Allow browser to talk to local agent
         cors_origins.append("http://localhost:8742")
         cors_origins.append("http://127.0.0.1:8742")
+        # Allow SSO redirects from RKT admin dashboard
+        cors_origins.append("https://rktgrading.com")
     elif settings.mode == "agent":
         # Agent accepts requests from the cloud UI and localhost
         cors_origins = [
-            "https://rktgradingstation.co.uk",
+            "https://rgs.rktgrading.com",
             "http://localhost:8741",
             "http://127.0.0.1:8741",
         ]

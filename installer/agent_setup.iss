@@ -10,7 +10,7 @@
 AppName=RKT Station Agent
 AppVersion=1.3.0
 AppPublisher=RKT Grading
-AppPublisherURL=https://rktgradingstation.co.uk
+AppPublisherURL=https://rgs.rktgrading.com
 DefaultDirName={autopf}\RKT Station Agent
 DefaultGroupName=RKT Station Agent
 OutputDir=..\dist

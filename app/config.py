@@ -150,6 +150,7 @@ class AppSettings(BaseSettings):
     webhook_url: str = ""
     webhook_secret: str = ""
     auth_secret: str = "rkt-default-secret-change-me"
+    sso_secret: str = ""  # Shared secret for SSO from rktgrading.com admin
     printer_mock_mode: bool = True
     printer_name: str = ""
     nfc_mock_mode: bool = True
