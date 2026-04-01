@@ -403,8 +403,10 @@ def acquire_scan(req: ScanRequest):
             "format": "png",
         }
     except Exception as e:
-        logger.error(f"Scan failed: {e}")
-        raise HTTPException(500, f"Scan failed: {e}")
+        import traceback
+        tb = traceback.format_exc()
+        logger.error(f"Scan failed: {e}\n{tb}")
+        raise HTTPException(500, f"Scan failed: {e}\nTraceback: {tb}")
 
 
 # ---- Printer ----
