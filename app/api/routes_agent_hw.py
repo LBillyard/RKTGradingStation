@@ -4,7 +4,6 @@ These endpoints drive physical hardware (scanner, printer, NFC reader)
 and are only registered when RKT_MODE is 'agent' or 'desktop'.
 """
 
-import asyncio
 import ipaddress
 import logging
 import socket
@@ -327,17 +326,17 @@ def agent_status():
 # ---- Scanner ----
 
 @router.get("/scan/devices")
-async def list_scan_devices():
+def list_scan_devices():
     """List available scanner devices."""
     scanner = _get_scanner()
     if hasattr(scanner, 'list_devices'):
-        devices = await asyncio.to_thread(scanner.list_devices)
+        devices = scanner.list_devices()
         return {"devices": devices, "mock_mode": settings.scanner.mock_mode}
     return {"devices": [], "mock_mode": settings.scanner.mock_mode}
 
 
 @router.post("/scan")
-async def acquire_scan(req: ScanRequest):
+def acquire_scan(req: ScanRequest):
     """Acquire an image from the scanner.
 
     Returns the scanned image as base64-encoded PNG.
@@ -349,18 +348,18 @@ async def acquire_scan(req: ScanRequest):
         # Auto-connect to first available device if not already connected
         if hasattr(scanner, 'is_connected') and not scanner.is_connected():
             if hasattr(scanner, 'list_devices'):
-                devices = await asyncio.to_thread(scanner.list_devices)
+                devices = scanner.list_devices()
                 if devices:
                     device_id = devices[0].device_id if hasattr(devices[0], 'device_id') else devices[0].get('device_id', '')
                     if device_id:
-                        await asyncio.to_thread(scanner.connect, device_id)
+                        scanner.connect(device_id)
                         logger.info(f"Auto-connected to scanner: {device_id}")
                     else:
                         raise RuntimeError("Scanner found but no device_id available")
                 else:
                     raise RuntimeError("No scanner devices found — is the scanner connected?")
 
-        result = await asyncio.to_thread(scanner.scan, req.dpi)
+        result = scanner.scan(req.dpi)
 
         # Get PIL image from result
         pil_img = None
@@ -379,7 +378,7 @@ async def acquire_scan(req: ScanRequest):
             raise RuntimeError(f"Unexpected scan result type: {type(result)}")
 
         # Detect and crop cards from the full-bed scan
-        cards_data = await asyncio.to_thread(_detect_and_crop_cards, pil_img)
+        cards_data = _detect_and_crop_cards(pil_img)
 
         if cards_data:
             # Return cropped card images (much smaller than full bed)
@@ -411,15 +410,15 @@ async def acquire_scan(req: ScanRequest):
 # ---- Printer ----
 
 @router.get("/printers")
-async def list_printers():
+def list_printers():
     """List available printers."""
     printer = _get_printer()
-    printers = await asyncio.to_thread(printer.list_printers)
+    printers = printer.list_printers()
     return {"printers": printers, "mock_mode": settings.printer.mock_mode}
 
 
 @router.post("/print")
-async def print_image(req: PrintRequest):
+def print_image(req: PrintRequest):
     """Download an image from a URL and print it."""
     printer = _get_printer()
     width = req.width_mm or settings.printer.label_width_mm
@@ -446,8 +445,7 @@ async def print_image(req: PrintRequest):
 
         # Print it
         try:
-            result = await asyncio.to_thread(
-                printer.print_image,
+            result = printer.print_image(
                 image_path=tmp_path,
                 printer_name=printer_name or "default",
                 width_mm=width,
@@ -471,25 +469,25 @@ async def print_image(req: PrintRequest):
 # ---- NFC ----
 
 @router.get("/nfc/readers")
-async def list_nfc_readers():
+def list_nfc_readers():
     """List available NFC readers."""
     nfc = _get_nfc_reader()
-    readers = await asyncio.to_thread(nfc.list_readers)
+    readers = nfc.list_readers()
     return {"readers": readers, "mock_mode": settings.nfc.mock_mode}
 
 
 @router.get("/nfc/detect")
-async def detect_nfc_tag():
+def detect_nfc_tag():
     """Detect what tag is on the NFC reader."""
     nfc = _get_nfc_reader()
     if settings.nfc.mock_mode:
         tag_info = nfc.detect_tag()
     else:
-        info = await asyncio.to_thread(nfc.connect, settings.nfc.reader_name)
+        info = nfc.connect(settings.nfc.reader_name)
         if not info.is_connected:
             return {"detected": False, "error": "No NFC reader connected"}
         try:
-            tag_info = await asyncio.to_thread(nfc.detect_tag)
+            tag_info = nfc.detect_tag()
         finally:
             nfc.disconnect()
 
@@ -499,7 +497,7 @@ async def detect_nfc_tag():
 
 
 @router.post("/nfc/program")
-async def program_nfc_tag(req: NfcProgramRequest):
+def program_nfc_tag(req: NfcProgramRequest):
     """Program an NFC tag with the given payload."""
     nfc = _get_nfc_reader()
 
@@ -510,7 +508,7 @@ async def program_nfc_tag(req: NfcProgramRequest):
             else:
                 result = nfc.program_ntag213(req.serial_number, req.base_url)
         else:
-            info = await asyncio.to_thread(nfc.connect, settings.nfc.reader_name)
+            info = nfc.connect(settings.nfc.reader_name)
             if not info.is_connected:
                 raise RuntimeError("No NFC reader connected")
 
@@ -520,15 +518,11 @@ async def program_nfc_tag(req: NfcProgramRequest):
                     master_key = bytes.fromhex(req.master_key or settings.nfc_master_key)
                     sdm_file_key = bytes.fromhex(req.sdm_file_read_key or settings.nfc_sdm_file_read_key)
                     sdm_meta_key = bytes.fromhex(req.sdm_meta_read_key or settings.nfc_sdm_meta_read_key)
-                    result = await asyncio.to_thread(
-                        program_sdm, nfc, req.serial_number, req.base_url,
-                        master_key, sdm_file_key, sdm_meta_key,
-                    )
+                    result = program_sdm(nfc, req.serial_number, req.base_url,
+                        master_key, sdm_file_key, sdm_meta_key)
                 else:
                     from app.services.nfc.ntag213 import program_url
-                    result = await asyncio.to_thread(
-                        program_url, nfc, req.serial_number, req.base_url,
-                    )
+                    result = program_url(nfc, req.serial_number, req.base_url)
             finally:
                 nfc.disconnect()
 
@@ -623,7 +617,7 @@ async def check_scan_quality(image_path: str = ""):
         return {"error": "Provide image_path parameter"}
 
     validated_path = _validate_image_path(image_path)
-    quality = await asyncio.to_thread(analyze_scan_quality, str(validated_path))
+    quality = analyze_scan_quality(str(validated_path))
     record_scan_quality(
         brightness=quality["brightness"],
         contrast=quality["contrast"],
@@ -641,7 +635,7 @@ async def calibration_check(image_path: str):
     from app.services.agent.telemetry import record_scan_quality
 
     validated_path = _validate_image_path(image_path)
-    quality = await asyncio.to_thread(analyze_scan_quality, str(validated_path))
+    quality = analyze_scan_quality(str(validated_path))
     record_scan_quality(
         brightness=quality["brightness"],
         contrast=quality["contrast"],
@@ -662,7 +656,7 @@ async def hash_scanned_image(image_path: str, operator_name: str = ""):
     from app.services.agent.telemetry import log_custody_event
 
     validated_path = _validate_image_path(image_path)
-    img_hash = await asyncio.to_thread(hash_image, str(validated_path))
+    img_hash = hash_image(str(validated_path))
     signed = sign_image(img_hash, settings.station_id, operator_name)
 
     # Log custody event
@@ -691,7 +685,7 @@ async def verify_image(image_path: str, original_hash: str, signature: str,
         "timestamp": timestamp,
         "signature": signature,
     }
-    result = await asyncio.to_thread(verify_image_integrity, str(validated_path), signed_record)
+    result = verify_image_integrity(str(validated_path), signed_record)
     return result
 
 
@@ -732,7 +726,7 @@ async def get_pending_cache():
 async def sync_to_cloud():
     """Manually trigger sync of cached items to the cloud."""
     from app.services.agent.telemetry import sync_cached_items
-    result = await asyncio.to_thread(sync_cached_items, settings.nfc.verify_base_url.rsplit("/", 1)[0])
+    result = sync_cached_items(settings.nfc.verify_base_url.rsplit("/", 1)[0])
     return result
 
 
