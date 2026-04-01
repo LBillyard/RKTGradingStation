@@ -434,9 +434,8 @@ def print_image(req: PrintRequest):
         # Download the image to a temp file
         import httpx
 
-        async with httpx.AsyncClient(follow_redirects=True) as client:
-            resp = await client.get(req.image_url, timeout=30.0)
-            resp.raise_for_status()
+        resp = httpx.get(req.image_url, follow_redirects=True, timeout=30.0)
+        resp.raise_for_status()
 
         # Validate final URL after redirects (SSRF protection)
         _validate_url_safe(str(resp.url))
