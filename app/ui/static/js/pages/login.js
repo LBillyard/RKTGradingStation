@@ -1,7 +1,7 @@
 /**
  * Operator Login page module.
  *
- * Styled to match the rktgrading.com login screen.
+ * Pixel-perfect match of the rktgrading.com login screen.
  * Password-based authentication for operators, stores JWT in localStorage.
  */
 import { api } from '../api.js';
@@ -21,7 +21,7 @@ function buildLayout() {
             <div class="rkt-login-card">
                 <!-- Logo -->
                 <div class="rkt-login-header">
-                    <a href="#/login" class="rkt-login-logo">RKT<span class="rkt-dot">.</span></a>
+                    <a href="#/login" class="rkt-login-logo"><span class="rkt-logo-text">RKT</span><span class="rkt-dot">.</span></a>
                     <p class="rkt-login-subtitle">Sign in to your account</p>
                 </div>
 
@@ -37,7 +37,9 @@ function buildLayout() {
                     </div>
 
                     <div class="rkt-form-group">
-                        <label for="login-password" class="rkt-form-label">Password</label>
+                        <div class="rkt-label-row">
+                            <label for="login-password" class="rkt-form-label">Password</label>
+                        </div>
                         <input type="password" id="login-password" class="rkt-form-input"
                                placeholder="Enter your password" autocomplete="current-password">
                     </div>
@@ -77,19 +79,17 @@ function buildLayout() {
                 align-items: center;
                 justify-content: center;
                 padding: 1rem;
-                background: #f1f3f5;
+                background: #f6f7f9;
             }
 
             .rkt-login-card {
                 width: 100%;
                 max-width: 420px;
-                background: rgba(255,255,255,0.85);
-                backdrop-filter: blur(12px);
-                -webkit-backdrop-filter: blur(12px);
-                border: 1px solid rgba(0,0,0,0.06);
-                border-radius: 16px;
-                padding: 2rem;
-                box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+                background: #fff;
+                border: 1px solid #e3e7ee;
+                border-radius: 14px;
+                padding: 32px;
+                box-shadow: rgba(11,18,32,0.04) 0px 1px 3px 0px, rgba(11,18,32,0.02) 0px 1px 2px 0px;
             }
 
             .rkt-login-header {
@@ -101,16 +101,19 @@ function buildLayout() {
                 font-size: 2rem;
                 font-weight: 700;
                 letter-spacing: -0.5px;
-                color: #1a1f36;
                 text-decoration: none;
             }
 
-            .rkt-login-logo .rkt-dot {
-                color: #e63946;
+            .rkt-logo-text {
+                color: #0b1f3a;
+            }
+
+            .rkt-dot {
+                color: #c9a227;
             }
 
             .rkt-login-subtitle {
-                color: #6b7280;
+                color: #3a4250;
                 margin-top: 0.5rem;
                 font-size: 0.9rem;
             }
@@ -122,7 +125,7 @@ function buildLayout() {
                 background: rgba(239,68,68,0.08);
                 border: 1px solid rgba(239,68,68,0.15);
                 color: #dc2626;
-                font-size: 0.85rem;
+                font-size: 0.875rem;
                 text-align: center;
             }
 
@@ -137,23 +140,35 @@ function buildLayout() {
                 flex-direction: column;
             }
 
+            .rkt-label-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 6px;
+            }
+
             .rkt-form-label {
-                font-size: 0.85rem;
+                font-size: 14px;
                 font-weight: 500;
-                color: #4b5563;
-                margin-bottom: 0.4rem;
+                color: #3a4250;
+                margin-bottom: 6px;
+            }
+
+            .rkt-label-row .rkt-form-label {
+                margin-bottom: 0;
             }
 
             .rkt-form-input {
                 width: 100%;
                 background: #fff;
-                border: 1px solid #e5e7eb;
+                border: 1px solid #e3e7ee;
                 border-radius: 8px;
-                padding: 0.75rem 1rem;
-                font-size: 0.9rem;
-                color: #1a1f36;
+                padding: 12px 16px;
+                font-size: 16px;
+                color: #0b1f3a;
                 outline: none;
                 transition: border-color 0.2s, box-shadow 0.2s;
+                font-family: inherit;
             }
 
             .rkt-form-input::placeholder {
@@ -161,26 +176,27 @@ function buildLayout() {
             }
 
             .rkt-form-input:focus {
-                border-color: #e63946;
-                box-shadow: 0 0 0 2px rgba(230,57,70,0.15);
+                border-color: #0b1f3a;
+                box-shadow: 0 0 0 2px rgba(11,31,58,0.1);
             }
 
             .rkt-login-btn {
                 width: 100%;
-                padding: 0.75rem;
-                background: #e63946;
+                padding: 12px 28px;
+                background: #0b1f3a;
                 color: #fff;
                 border: none;
-                border-radius: 8px;
-                font-size: 0.9rem;
-                font-weight: 600;
+                border-radius: 12px;
+                font-size: 16px;
+                font-weight: 500;
                 cursor: pointer;
                 transition: background 0.2s, opacity 0.2s;
                 margin-top: 0.5rem;
+                font-family: inherit;
             }
 
             .rkt-login-btn:hover {
-                background: #d62839;
+                background: #162d4d;
             }
 
             .rkt-login-btn:disabled {
@@ -190,15 +206,16 @@ function buildLayout() {
 
             .rkt-logout-btn {
                 width: 100%;
-                padding: 0.75rem;
+                padding: 12px 28px;
                 background: transparent;
-                color: #6b7280;
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                font-size: 0.9rem;
+                color: #3a4250;
+                border: 1px solid #e3e7ee;
+                border-radius: 12px;
+                font-size: 16px;
                 font-weight: 500;
                 cursor: pointer;
                 transition: all 0.2s;
+                font-family: inherit;
             }
 
             .rkt-logout-btn:hover {
@@ -211,8 +228,8 @@ function buildLayout() {
                 width: 56px;
                 height: 56px;
                 border-radius: 50%;
-                background: rgba(230,57,70,0.08);
-                color: #e63946;
+                background: rgba(11,31,58,0.06);
+                color: #0b1f3a;
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -222,7 +239,7 @@ function buildLayout() {
             .rkt-login-opname {
                 font-size: 1.1rem;
                 font-weight: 600;
-                color: #1a1f36;
+                color: #0b1f3a;
                 margin: 0 0 0.25rem;
             }
 
@@ -234,13 +251,13 @@ function buildLayout() {
                 text-transform: uppercase;
                 letter-spacing: 0.5px;
                 border-radius: 20px;
-                background: rgba(230,57,70,0.1);
-                color: #e63946;
+                background: rgba(11,31,58,0.08);
+                color: #0b1f3a;
             }
 
             .rkt-login-divider {
                 height: 1px;
-                background: #e5e7eb;
+                background: #e3e7ee;
                 margin: 1.5rem 0;
             }
         </style>
@@ -262,7 +279,6 @@ function attachListeners(container) {
 async function doLogin() {
     const name = document.getElementById('login-name')?.value?.trim();
     const password = document.getElementById('login-password')?.value?.trim();
-    const errorEl = document.getElementById('login-error');
     const submitBtn = document.getElementById('login-submit');
 
     if (!name || !password) {
