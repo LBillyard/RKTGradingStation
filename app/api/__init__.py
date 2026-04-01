@@ -280,13 +280,23 @@ def create_app() -> FastAPI:
 
         @app.get("/api/agent/download")
         async def agent_download():
-            """Generate a presigned S3 URL and redirect to download the agent."""
-            from fastapi.responses import RedirectResponse
+            """Serve the agent EXE from local file or S3 presigned URL."""
+            from fastapi.responses import FileResponse, RedirectResponse
+
+            # First check for local file (uploaded directly to server)
+            local_path = Path(app_settings.data_dir) / "downloads" / "RKTStationAgent-latest.exe"
+            if local_path.exists():
+                return FileResponse(
+                    str(local_path),
+                    media_type="application/octet-stream",
+                    filename=f"RKTStationAgent-v{_AGENT_LATEST}.exe",
+                )
+
+            # Fall back to S3 presigned URL
             try:
                 import boto3
                 from botocore.config import Config
                 region = app_settings.s3.region or "eu-west-2"
-                # Use explicit creds if set, otherwise fall back to IAM instance role
                 kwargs = {
                     "region_name": region,
                     "endpoint_url": f"https://s3.{region}.amazonaws.com",
@@ -308,7 +318,7 @@ def create_app() -> FastAPI:
                 return RedirectResponse(url)
             except Exception as e:
                 logger.error(f"Agent download failed: {e}")
-                return JSONResponse({"error": "Agent download not available"}, status_code=404)
+                return JSONResponse({"error": "Agent download not available. Upload EXE to data/downloads/RKTStationAgent-latest.exe"}, status_code=404)
 
         @app.get("/api/agent/changelog")
         async def agent_changelog():
