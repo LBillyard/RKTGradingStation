@@ -294,9 +294,22 @@ def agent_status():
     """
     from agent_version import AGENT_VERSION
 
-    scanner_devices = []
-    printers = []
-    nfc_readers = []
+    scanner = _get_scanner()
+    printer = _get_printer()
+    nfc = _get_nfc_reader()
+
+    try:
+        scanner_devices = scanner.list_devices() if hasattr(scanner, 'list_devices') else []
+    except Exception:
+        scanner_devices = []
+    try:
+        printers = printer.list_printers()
+    except Exception:
+        printers = []
+    try:
+        nfc_readers = nfc.list_readers()
+    except Exception:
+        nfc_readers = []
 
     telemetry = {}
 
