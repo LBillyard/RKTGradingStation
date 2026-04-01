@@ -390,34 +390,16 @@ def acquire_scan(req: ScanRequest):
         else:
             raise RuntimeError(f"Unexpected scan result type: {type(result)}")
 
-        # Detect and crop cards from the full-bed scan (requires OpenCV)
-        cards_data = []
-        try:
-            cards_data = _detect_and_crop_cards(pil_img)
-        except Exception as cv_err:
-            logger.info(f"Card detection skipped: {cv_err}")
-            cards_data = []
-
-        if cards_data:
-            # Return cropped card images (much smaller than full bed)
-            logger.info(f"Detected {len(cards_data)} card(s), uploading cropped images")
-            return {
-                "status": "success",
-                "cards": cards_data,
-                "card_count": len(cards_data),
-                "format": "png",
-            }
-        else:
-            # Fallback: no cards detected, send full image
-            import io
-            buf = io.BytesIO()
-            pil_img.save(buf, format="PNG")
-            image_data = base64.b64encode(buf.getvalue()).decode()
-            logger.warning("No cards detected in scan, sending full bed image")
-            return {
-                "status": "success",
-                "image_data": image_data,
-                "image_path": "memory",
+        # Return the full scanned image (card detection done server-side)
+        import io
+        buf = io.BytesIO()
+        pil_img.save(buf, format="PNG")
+        image_data = base64.b64encode(buf.getvalue()).decode()
+        logger.info(f"Scan complete — image size: {len(image_data)} chars base64")
+        return {
+            "status": "success",
+            "image_data": image_data,
+            "image_path": "memory",
             "format": "png",
         }
     except Exception as e:
