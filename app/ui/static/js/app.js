@@ -61,18 +61,53 @@ class AppRouter {
         const ssoToken = urlParams.get('sso_token');
         if (ssoToken) {
             localStorage.setItem('rkt-auth-token', ssoToken);
-            // Clean the URL — remove query params and set dashboard hash
-            window.history.replaceState({}, '', window.location.pathname + '#/dashboard');
+            // Fetch operator info using the new token, then redirect
+            fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${ssoToken}` } })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.authenticated && data.operator) {
+                        localStorage.setItem('rkt-operator', JSON.stringify(data.operator));
+                    }
+                })
+                .catch(() => {})
+                .finally(() => {
+                    window.history.replaceState({}, '', window.location.pathname + '#/dashboard');
+                    this.handleRoute();
+                });
+            return; // Don't continue — the .finally() above handles routing
         }
 
-        // Always start at login if no token, dashboard if token exists
+        // Validate existing token on page load
         const token = localStorage.getItem('rkt-auth-token');
         if (!token) {
             window.location.hash = '#/login';
-        } else if (!window.location.hash) {
-            window.location.hash = '#/dashboard';
         } else {
-            this.handleRoute();
+            // Verify token is still valid before routing
+            fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.authenticated && data.operator) {
+                        localStorage.setItem('rkt-operator', JSON.stringify(data.operator));
+                        if (!window.location.hash || window.location.hash === '#/login') {
+                            window.location.hash = '#/dashboard';
+                        } else {
+                            this.handleRoute();
+                        }
+                    } else {
+                        // Token invalid — clear and go to login
+                        localStorage.removeItem('rkt-auth-token');
+                        localStorage.removeItem('rkt-operator');
+                        window.location.hash = '#/login';
+                    }
+                })
+                .catch(() => {
+                    // Network error — try routing anyway
+                    if (!window.location.hash) {
+                        window.location.hash = '#/dashboard';
+                    } else {
+                        this.handleRoute();
+                    }
+                });
         }
     }
 
