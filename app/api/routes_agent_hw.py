@@ -391,10 +391,11 @@ def acquire_scan(req: ScanRequest):
             raise RuntimeError(f"Unexpected scan result type: {type(result)}")
 
         # Detect and crop cards from the full-bed scan (requires OpenCV)
+        cards_data = []
         try:
             cards_data = _detect_and_crop_cards(pil_img)
-        except (ImportError, ModuleNotFoundError):
-            logger.info("OpenCV not available — skipping multi-card detection, returning full scan")
+        except Exception as cv_err:
+            logger.info(f"Card detection skipped: {cv_err}")
             cards_data = []
 
         if cards_data:
