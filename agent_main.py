@@ -9,6 +9,7 @@ Usage:
     RKTStationAgent.exe --console    # Debug mode with console output
 """
 
+import asyncio
 import io
 import logging
 import os
@@ -17,6 +18,11 @@ import threading
 import time
 import webbrowser
 from pathlib import Path
+
+# Fix Windows asyncio: ProactorEventLoop (default on 3.11+) breaks uvicorn HTTP handling.
+# Must be set before any event loop is created.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # Fix for PyInstaller --noconsole: sys.stdout/stderr are None
 if sys.stdout is None:
@@ -72,45 +78,50 @@ def main() -> None:
 
     console_mode = "--console" in sys.argv
 
-    if console_mode:
-        # Debug mode: just run the server with console output
-        _run_server(settings)
-    else:
-        # Normal mode: server in background, tray in foreground
-        server_thread = threading.Thread(
-            target=_run_server,
-            args=(settings,),
-            daemon=True,
-            name="agent-server",
-        )
-        server_thread.start()
+    # Pre-import agent routes BEFORE uvicorn starts its event loop.
+    # This prevents asyncio import side-effects from interfering with uvicorn.
+    if settings.mode == "agent":
+        import app.api.routes_agent_hw  # noqa: F401
 
-        # Wait for server to start
-        for _ in range(30):
-            try:
-                import httpx
-                r = httpx.get("http://localhost:8742/agent/status", timeout=1.0)
-                if r.status_code == 200:
-                    global _server_running
-                    _server_running = True
-                    break
-            except Exception:
-                pass
-            time.sleep(0.3)
-
-        _run_tray(settings, logger)
+    # Always run server directly — tray disabled for now to fix PyInstaller compatibility
+    global _server_running
+    _server_running = True
+    _run_server(settings)
 
 
 def _run_server(settings) -> None:
     """Start the agent FastAPI server."""
     import uvicorn
-    from app.api import create_app
 
-    app = create_app()
+    if settings.mode == "agent":
+        # Agent mode: build a minimal app directly to avoid create_app() deadlocks
+        # on Windows (ProactorEventLoop + BaseHTTPMiddleware interaction)
+        from fastapi import FastAPI
+        from fastapi.middleware.cors import CORSMiddleware
+
+        app = FastAPI(title="RKT Station Agent", version="1.0.0")
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["https://rgs.rktgrading.com", "http://localhost:8741", "http://127.0.0.1:8741"],
+            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+        )
+
+        # Include agent hardware routes
+        from app.api.routes_agent_hw import router as agent_hw_router
+        app.include_router(agent_hw_router, prefix="/agent", tags=["Agent Hardware"])
+
+        @app.get("/agent/status")
+        def agent_status():
+            return {"version": AGENT_VERSION, "mode": "agent", "station_id": settings.station_id or "not set"}
+    else:
+        from app.api import create_app
+        app = create_app()
+
     uvicorn.run(
         app,
         host="127.0.0.1",
-        port=8742,
+        port=settings.server_port if settings.mode != "agent" else 8742,
         log_level="info",
         access_log=False,
     )

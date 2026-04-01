@@ -6,6 +6,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+# Import token verification eagerly — lazy import inside async dispatch
+# causes deadlocks on Windows due to GIL + event loop interaction.
+from app.api.routes_auth import _verify_token  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 # Paths that do NOT require authentication
@@ -51,7 +55,6 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                     status_code=401,
                 )
             token = auth_header[7:]
-            from app.api.routes_auth import _verify_token
             payload = _verify_token(token)
             if payload is None:
                 return JSONResponse(

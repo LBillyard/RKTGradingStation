@@ -68,7 +68,7 @@ def build():
         venv_python, "-m", "PyInstaller",
         "--name", "RKTStationAgent",
         "--onefile",
-        "--noconsole",
+        "--console",
         "--icon", "rkt_agent.ico",
         # Bundle the icon file
         "--add-data", "rkt_agent.ico;.",

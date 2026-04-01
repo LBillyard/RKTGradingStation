@@ -194,10 +194,11 @@ def create_app() -> FastAPI:
     from app.middleware.security import SecurityMiddleware
     app.add_middleware(SecurityMiddleware, debug=settings.debug)
 
-    # Mount static files
-    static_dir = UI_DIR / "static"
-    if static_dir.exists():
-        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    # Mount static files (skip in agent mode — agent doesn't serve the web UI)
+    if settings.mode != "agent":
+        static_dir = UI_DIR / "static"
+        if static_dir.exists():
+            app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     # H4: Authenticated endpoint for data files instead of unauthenticated StaticFiles mount
     from app.config import settings as app_settings
@@ -329,21 +330,23 @@ def create_app() -> FastAPI:
                 return json.loads(changelog_path.read_text(encoding="utf-8"))
             return []
 
-    # Robots.txt — block all search engine indexing
-    @app.get("/robots.txt")
-    async def robots_txt():
-        return FileResponse(str(UI_DIR / "static" / "robots.txt"), media_type="text/plain")
+    # SPA routes — only for desktop/cloud modes (agent doesn't serve the web UI)
+    if settings.mode != "agent":
+        # Robots.txt — block all search engine indexing
+        @app.get("/robots.txt")
+        async def robots_txt():
+            return FileResponse(str(UI_DIR / "static" / "robots.txt"), media_type="text/plain")
 
-    # SPA catch-all: serve index.html for non-API, non-static routes
-    @app.get("/")
-    async def serve_index():
-        return FileResponse(str(UI_DIR / "index.html"))
+        # SPA catch-all: serve index.html for non-API, non-static routes
+        @app.get("/")
+        async def serve_index():
+            return FileResponse(str(UI_DIR / "index.html"))
 
-    @app.get("/{path:path}")
-    async def serve_spa(path: str):
-        # Don't catch API or static routes
-        if path.startswith(("api/", "static/", "data/")):
-            return JSONResponse({"detail": "Not found"}, status_code=404)
-        return FileResponse(str(UI_DIR / "index.html"))
+        @app.get("/{path:path}")
+        async def serve_spa(path: str):
+            # Don't catch API or static routes
+            if path.startswith(("api/", "static/", "data/")):
+                return JSONResponse({"detail": "Not found"}, status_code=404)
+            return FileResponse(str(UI_DIR / "index.html"))
 
     return app

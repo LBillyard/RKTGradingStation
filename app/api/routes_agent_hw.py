@@ -286,28 +286,20 @@ def _get_nfc_reader():
 # ---- Status ----
 
 @router.get("/status")
-async def agent_status():
-    """Agent health check — returns hardware availability and version."""
+def agent_status():
+    """Agent health check — returns hardware availability and version.
+
+    Note: hardware enumeration is deferred to dedicated endpoints
+    (/scanner/devices, /printer/list, /nfc/readers) to avoid COM
+    threading deadlocks with uvicorn on Windows.
+    """
     from agent_version import AGENT_VERSION
 
-    scanner = _get_scanner()
-    printer = _get_printer()
-    nfc = _get_nfc_reader()
+    scanner_devices = []
+    printers = []
+    nfc_readers = []
 
-    scanner_devices = await asyncio.to_thread(scanner.list_devices) if hasattr(scanner, 'list_devices') else []
-    printers = await asyncio.to_thread(printer.list_printers)
-    nfc_readers = await asyncio.to_thread(nfc.list_readers)
-
-    # Get telemetry summary
     telemetry = {}
-    try:
-        from app.services.agent.telemetry import get_productivity_stats, get_pending_sync
-        telemetry = {
-            "productivity": get_productivity_stats(),
-            "pending_sync": len(get_pending_sync()),
-        }
-    except Exception:
-        pass
 
     return {
         "status": "online",
