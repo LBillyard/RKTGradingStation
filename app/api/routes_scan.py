@@ -368,11 +368,10 @@ async def scan_to_slab_pipeline(
     # ── Step 5: Grading ──────────────────────────────────────────────────
     grade_data = None
     try:
-        # Gate: skip grading if card identification failed
+        # Note: grading proceeds even for unidentified cards — the vision-based
+        # grading engine analyses centering, corners, edges, surface independently
         if card_record.card_name in ("Unknown", "Unknown Card", ""):
-            card_record.status = "identification_failed"
-            db.commit()
-            raise RuntimeError("Card identification failed — manual review required")
+            logger.info("Card not identified — grading will proceed without card identity")
 
         from app.services.grading.engine import GradingEngine
         engine = GradingEngine(profile_name=profile)
