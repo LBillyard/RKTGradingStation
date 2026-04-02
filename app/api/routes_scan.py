@@ -668,11 +668,9 @@ async def batch_scan(session_id: str, dpi: int = 600, db: Session = Depends(get_
 
         # Grading
         try:
-            # Gate: skip grading if card identification failed
+            # Grading proceeds even for unidentified cards
             if card_record.card_name in ("Unknown", "Unknown Card", ""):
-                card_record.status = "identification_failed"
-                db.commit()
-                raise RuntimeError("Card identification failed — manual review required")
+                logger.info("Card not identified — grading will proceed without card identity")
 
             from app.services.grading.engine import GradingEngine
             engine = GradingEngine()
@@ -1097,11 +1095,9 @@ async def process_scan_session(session_id: str, force_multi: bool = False, db: S
 
     # Step 4: Grading
     try:
-        # Gate: skip grading only if card name is truly unknown
+        # Grading proceeds even for unidentified cards
         if card_record.card_name in ("Unknown", "Unknown Card", ""):
-            card_record.status = "identification_failed"
-            db.commit()
-            raise RuntimeError("Card identification failed — manual review required")
+            logger.info("Card not identified — grading will proceed without card identity")
 
         from app.services.grading.engine import GradingEngine
         engine = GradingEngine()
@@ -1389,11 +1385,9 @@ async def process_multi_scan(session_id: str, db: Session = Depends(get_db)):
 
         # Grading
         try:
-            # Gate: skip grading if card identification failed
+            # Grading proceeds even for unidentified cards
             if card_record.card_name in ("Unknown", "Unknown Card", ""):
-                card_record.status = "identification_failed"
-                db.commit()
-                raise RuntimeError("Card identification failed — manual review required")
+                logger.info("Card not identified — grading will proceed without card identity")
 
             from app.services.grading.engine import GradingEngine
             engine = GradingEngine()
