@@ -128,6 +128,8 @@ def build():
         "--hidden-import", "smartcard.System",
         "--hidden-import", "pystray",
         "--hidden-import", "pystray._win32",
+        "--hidden-import", "cv2",
+        "--hidden-import", "numpy",
         # Exclude heavy packages the agent doesn't need
         "--exclude-module", "torch",
         "--exclude-module", "torchvision",
@@ -137,9 +139,6 @@ def build():
         "--exclude-module", "scipy",
         "--exclude-module", "pandas",
         "--exclude-module", "matplotlib",
-        "--exclude-module", "numpy",
-        "--exclude-module", "cv2",
-        "--exclude-module", "opencv",
         "--exclude-module", "sklearn",
         "--exclude-module", "tensorflow",
         "--exclude-module", "transformers",
