@@ -180,12 +180,13 @@ async function scanStepStart() {
 
         // Use the processed image (card cropped/corrected) instead of raw scan
         if (pipeline.front_image_path) {
-            _scanState.frontImagePath = pipeline.front_image_path;
+            _scanState.frontImagePath = pipeline.front_image_path.replace(/^\//, '');
         } else if (pipeline.card_id) {
             try {
                 const cardData = await api.get(`/queue/list?limit=1`);
-                if (cardData.cards?.[0]?.front_image_path) {
-                    _scanState.frontImagePath = cardData.cards[0].front_image_path;
+                const imgPath = cardData.cards?.[0]?.front_image_path;
+                if (imgPath) {
+                    _scanState.frontImagePath = imgPath.replace(/^\//, '');
                 }
             } catch {}
         }
