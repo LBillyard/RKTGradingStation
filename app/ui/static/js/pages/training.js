@@ -233,7 +233,7 @@ function scanStepShowFrontResults() {
             <div class="col-md-4">
                 <div class="card bg-dark text-center p-2">
                     ${_scanState.frontImagePath
-                        ? `<img src="/data/${escapeHtml(_scanState.frontImagePath)}" class="img-fluid rounded" style="max-height:300px;object-fit:contain" alt="Front scan">`
+                        ? `<img src="/${escapeHtml(_scanState.frontImagePath)}" class="img-fluid rounded" style="max-height:300px;object-fit:contain" alt="Front scan">`
                         : '<div class="text-muted py-5">No image</div>'}
                 </div>
             </div>
@@ -376,7 +376,7 @@ function scanStepShowBackResults() {
                 <div class="card bg-dark text-center p-2">
                     <div class="small text-white-50 mb-1">Front</div>
                     ${_scanState.frontImagePath
-                        ? `<img src="/data/${escapeHtml(_scanState.frontImagePath)}" class="img-fluid rounded" style="max-height:200px;object-fit:contain" alt="Front">`
+                        ? `<img src="/${escapeHtml(_scanState.frontImagePath)}" class="img-fluid rounded" style="max-height:200px;object-fit:contain" alt="Front">`
                         : '<div class="text-muted py-3">—</div>'}
                 </div>
             </div>
@@ -384,7 +384,7 @@ function scanStepShowBackResults() {
                 <div class="card bg-dark text-center p-2">
                     <div class="small text-white-50 mb-1">Back</div>
                     ${_scanState.backImagePath
-                        ? `<img src="/data/${escapeHtml(_scanState.backImagePath)}" class="img-fluid rounded" style="max-height:200px;object-fit:contain" alt="Back">`
+                        ? `<img src="/${escapeHtml(_scanState.backImagePath)}" class="img-fluid rounded" style="max-height:200px;object-fit:contain" alt="Back">`
                         : '<div class="text-muted py-3">—</div>'}
                 </div>
             </div>
