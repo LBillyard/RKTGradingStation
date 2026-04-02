@@ -178,6 +178,18 @@ async function scanStepStart() {
         _scanState.pipelineResult = pipeline;
         _scanState.cardRecordId = pipeline.card_id;
 
+        // Use the processed image (card cropped/corrected) instead of raw scan
+        if (pipeline.front_image_path) {
+            _scanState.frontImagePath = pipeline.front_image_path;
+        } else if (pipeline.card_id) {
+            try {
+                const cardData = await api.get(`/queue/list?limit=1`);
+                if (cardData.cards?.[0]?.front_image_path) {
+                    _scanState.frontImagePath = cardData.cards[0].front_image_path;
+                }
+            } catch {}
+        }
+
         setProgress(100, 'Done!', '');
         scanStepShowFrontResults();
 
